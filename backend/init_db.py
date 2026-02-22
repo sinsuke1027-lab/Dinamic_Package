@@ -18,7 +18,11 @@ def init_db():
     conn = sqlite3.connect(DATABASE)
     cursor = conn.cursor()
 
-    # ─── テーブル作成 ───────────────────────────────────────────
+    # ─── テーブル再作成（スキーマ更新のため DROP してから CREATE） ───
+    cursor.execute('DROP TABLE IF EXISTS inventory')
+    cursor.execute('DROP TABLE IF EXISTS price_history')
+    cursor.execute('DROP TABLE IF EXISTS booking_events')
+
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS inventory (
             id              INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -45,18 +49,16 @@ def init_db():
 
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS booking_events (
-            id           INTEGER PRIMARY KEY AUTOINCREMENT,
-            inventory_id INTEGER NOT NULL,
-            booked_at    TEXT NOT NULL,
-            quantity     INTEGER DEFAULT 1,
+            id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+            inventory_id      INTEGER NOT NULL,
+            booked_at          TEXT NOT NULL,
+            quantity           INTEGER DEFAULT 1,
+            sold_price         INTEGER,
+            base_price_at_sale INTEGER,
+            is_package         INTEGER DEFAULT 0,
             FOREIGN KEY (inventory_id) REFERENCES inventory(id)
         )
     ''')
-
-    # 既存データをクリア
-    cursor.execute('DELETE FROM inventory')
-    cursor.execute('DELETE FROM price_history')
-    cursor.execute('DELETE FROM booking_events')
 
     # ─── 高度なダミーデータ投入 ───────────────────────────────────
     # (item_type, name, total_stock, remaining_stock, base_price, departure_date)
@@ -112,37 +114,71 @@ def populate_booking_events(conn):
     target_sell_ratio = 0.9
     total_inserted = 0
 
+def populate_booking_events(conn):
+    """
+    ROI分析および販売速度テスト用の予約履歴を生成する。
+    
+    ロジック:
+    - 過去7日間のデータを生成（ROIダッシュボード用）
+    - 直近24時間のデータは「最新の販売速度」として使用される
+    """
+    cursor = conn.cursor()
+    rows = cursor.execute("SELECT id, name, total_stock, remaining_stock, base_price, departure_date FROM inventory").fetchall()
+    
+    now_utc = datetime.now(timezone.utc)
+    target_sell_ratio = 0.9
+    total_inserted = 0
+
     for row in rows:
-        inv_id, name, total, remaining, dep_date_str = row
+        inv_id, name, total, remaining, base_p, dep_date_str = row
         dep_date = datetime.strptime(dep_date_str, '%Y-%m-%d').replace(tzinfo=timezone.utc)
-        lead_days = (dep_date - now_utc).days
-        lead_days = max(1, lead_days)
+        lead_days_current = (dep_date - now_utc).days
         
-        expected_daily = (total * target_sell_ratio) / lead_days
-        
-        # シナリオ別の件数設定
-        if "ハワイ・プレミアム空路" in name:
-            recent_count = int(expected_daily * 3) # 売れすぎ
-        elif "那覇行き LCC" in name:
-            recent_count = int(expected_daily * 5) # 激しく売れすぎ
-        elif "トランプ・ワイキキ" in name or "那覇ビジネス" in name:
-            recent_count = 0 # 全く売れていない
-        else:
-            recent_count = int(expected_daily) # 標準
-            
-        # 直近24時間の予約を生成
-        for _ in range(recent_count):
-            # 0〜24時間前のランダムな時間
-            offset = random.uniform(0, 24)
-            booked_at = (now_utc - timedelta(hours=offset)).isoformat()
-            cursor.execute(
-                "INSERT INTO booking_events (inventory_id, booked_at, quantity) VALUES (?, ?, ?)",
-                (inv_id, booked_at, 1)
-            )
-            total_inserted += 1
+        # --- 過去7日間の「累計販売データ」をシミュレート ---
+        # 各日ごとに数件ずつの予約を生成
+        for days_ago in range(7, -1, -1):
+            if days_ago == 0:
+                # 本日（直近24h）は既存のシナリオを適用
+                lead_days = max(1, lead_days_current)
+                expected_daily = (total * target_sell_ratio) / lead_days
+                
+                if "ハワイ・プレミアム空路" in name:
+                    count = int(expected_daily * 3)
+                    price_mult = 1.15 # 値上げして売れている
+                elif "那覇行き LCC" in name:
+                    count = int(expected_daily * 5)
+                    price_mult = 1.30 # 激しく値上げ
+                elif "トランプ・ワイキキ" in name or "那覇ビジネス" in name:
+                    count = 0 
+                    price_mult = 0.80
+                else:
+                    count = int(expected_daily)
+                    price_mult = 1.05
+                
+                hours_range = (0, 24)
+            else:
+                # 過去の日は標準的な売れ行きをシミュレート
+                count = random.randint(2, 5)
+                price_mult = random.uniform(0.9, 1.2)
+                hours_range = (days_ago * 24, (days_ago + 1) * 24)
+
+            for _ in range(count):
+                offset_hrs = random.uniform(hours_range[0], hours_range[1])
+                booked_at = (now_utc - timedelta(hours=offset_hrs)).isoformat()
+                
+                # ダイナミックプライシングでの販売価格
+                sold_p = int(base_p * price_mult * random.uniform(0.98, 1.02) / 100) * 100
+                is_pkg = 1 if random.random() < 0.3 else 0 # 30%はパッケージ販売と仮定
+                
+                cursor.execute(
+                    "INSERT INTO booking_events (inventory_id, booked_at, quantity, sold_price, base_price_at_sale, is_package) "
+                    "VALUES (?, ?, ?, ?, ?, ?)",
+                    (inv_id, booked_at, 1, sold_p, base_p, is_pkg)
+                )
+                total_inserted += 1
 
     conn.commit()
-    print(f"✅ booking_events テーブルに {total_inserted} 件の予約履歴を生成しました。")
+    print(f"✅ booking_events テーブルに {total_inserted} 件の予約履歴（ROI用データ含む）を生成しました。")
 
 if __name__ == '__main__':
     init_db()

@@ -91,6 +91,14 @@ button[data-baseweb="tab"][aria-selected="true"] {
     backdrop-filter: blur(8px);
     box-shadow: 0 0 24px rgba(99,102,241,.12);
 }
+/* ROI KPI カード */
+.metric-card-roi {
+    background: linear-gradient(135deg,#064e3b 0%,#065f46 100%);
+    border:1px solid #10b981; border-radius:16px;
+    padding:20px; text-align:center; margin:6px; height:100%;
+    box-shadow: 0 0 20px rgba(16,185,129,0.2);
+}
+.roi-value { font-size:2.2rem; font-weight:900; color:#10b981; margin:8px 0; text-shadow: 0 0 10px rgba(16,185,129,0.4); }
 hr { border-color: #1e293b; }
 </style>
 """, unsafe_allow_html=True)
@@ -194,18 +202,21 @@ _sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 try:
     from packaging_engine import (
         generate_packages, get_velocity_ratio, calc_velocity_adjustment,
-        hotel_urgency_score,
+        hotel_urgency_score, calculate_roi_metrics, calculate_inventory_rescue_metrics,
     )
     packages = generate_packages()
+    roi_metrics = calculate_roi_metrics()
+    rescue_metrics = calculate_inventory_rescue_metrics()
 except Exception as _e:
     packages = []
     _pkg_err = str(_e)
 
 # ─── 3タブ ────────────────────────────────────────────────────────
-tab1, tab2, tab3 = st.tabs([
+tab1, tab2, tab3, tab4 = st.tabs([
     "🏠  ライブ概況",
     "🔍  価格の内訳分析",
     "🃏  商品カルテ",
+    "💰  導入効果 (ROI)",
 ])
 
 
@@ -663,3 +674,103 @@ with tab3:
         height=450,
     )
     st.plotly_chart(fig_all, use_container_width=True)
+
+
+# ══════════════════════════════════════════════════════════════════
+# Tab 4: 導入効果 (ROI)
+# ══════════════════════════════════════════════════════════════════
+with tab4:
+    st.markdown("### 💰 導入効果分析 — ROI & 在庫救済実績")
+    st.markdown("<p style='color:#64748b;font-size:.9rem'>ダイナミックプライシング導入による収益リフトと、パッケージ施策による在庫救済効果を定量化。</p>",
+                unsafe_allow_html=True)
+
+    # ── ROI サマリ KPI ───────────────────────────────────────────
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        st.markdown(f"""
+        <div class="metric-card-roi">
+            <div class="metric-label">合計収益リフト</div>
+            <div class="roi-value">+¥{roi_metrics['lift']:,}</div>
+            <div class="metric-sub">固定価格比 <b>+{roi_metrics['lift_pct']}%</b></div>
+        </div>
+        """, unsafe_allow_html=True)
+    with c2:
+        st.markdown(f"""
+        <div class="metric-card-roi">
+            <div class="metric-label">在庫救済率 (全体)</div>
+            <div class="roi-value">{rescue_metrics['overall_rescue_rate']}%</div>
+            <div class="metric-sub">切迫在庫の <b>{rescue_metrics['rescued_units']}個</b> を救済</div>
+        </div>
+        """, unsafe_allow_html=True)
+    with c3:
+        st.markdown(f"""
+        <div class="metric-card-roi">
+            <div class="metric-label">ホテル販売改善</div>
+            <div class="roi-value">{rescue_metrics['hotel_rescue_rate']}%</div>
+            <div class="metric-sub">パッケージによる救済寄与</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    st.markdown("---")
+
+    # ── 売上比較グラフ ───────────────────────────────────────────
+    col_chart, col_donut = st.columns([2, 1])
+
+    with col_chart:
+        st.markdown("#### 📈 売上比較：固定価格 vs 動的価格（累計）")
+        df_daily = pd.DataFrame(roi_metrics["daily_data"])
+        
+        # 累積値の計算
+        df_daily["cum_dynamic"] = df_daily["day_dynamic"].cumsum()
+        df_daily["cum_fixed"]   = df_daily["day_fixed"].cumsum()
+
+        fig_roi = go.Figure()
+        fig_roi.add_trace(go.Scatter(
+            x=df_daily["day"], y=df_daily["cum_dynamic"],
+            name="動적価格 (実績)", mode='lines+markers',
+            line=dict(color='#10b981', width=4),
+            fill='tonexty', fillcolor='rgba(16,185,129,0.1)'
+        ))
+        fig_roi.add_trace(go.Scatter(
+            x=df_daily["day"], y=df_daily["cum_fixed"],
+            name="固定価格 (想定)", mode='lines',
+            line=dict(color='#64748b', width=2, dash='dash')
+        ))
+        
+        dark_layout(fig_roi, "累積売上の推移比較")
+        fig_roi.update_yaxes(tickprefix="¥", tickformat=",")
+        st.plotly_chart(fig_roi, use_container_width=True)
+
+    with col_donut:
+        st.markdown("#### 🛡 在庫救済の内訳")
+        # ドーナツチャート
+        rescued = rescue_metrics["rescued_units"]
+        abandoned = rescue_metrics["total_units"] - rescued
+        
+        fig_donut = go.Figure(data=[go.Pie(
+            labels=["救済済 (パッケージ)", "通常販売/未売"],
+            values=[rescued, abandoned],
+            hole=.6,
+            marker_colors=["#10b981", "#1e293b"],
+            textinfo='percent',
+            hoverinfo='label+value'
+        )])
+        fig_donut.update_layout(
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)",
+            font=dict(color="#94a3b8"),
+            showlegend=True,
+            legend=dict(orientation="h", yanchor="bottom", y=-0.2, xanchor="center", x=0.5),
+            margin=dict(t=0, b=0, l=0, r=0),
+            height=300
+        )
+        st.plotly_chart(fig_donut, use_container_width=True)
+
+    st.markdown("---")
+    
+    # ── インパクト・メッセージ ───────────────────────────────────
+    st.success(f"""
+    **💡 ビジネスインサイト:**
+    動的価格調整により、本来の想定売上 ¥{roi_metrics['total_fixed']:,} に対して **¥{roi_metrics['lift']:,} の増分収益** を生み出しています。
+    また、パッケージ化（クロスセル）により、ホテルの切迫在庫のうち **{rescue_metrics['hotel_rescue_rate']}%** が効率的に消化されました。
+    """)

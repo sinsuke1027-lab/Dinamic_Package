@@ -375,6 +375,84 @@ def generate_packages(reference_date: Optional[date] = None) -> list[dict]:
     return packages
 
 
+def calculate_roi_metrics() -> dict:
+    """収益リフト（動的価格 vs 固定価格）を集計する"""
+    conn = get_conn()
+    cursor = conn.cursor()
+    
+    # 全販売データの集計
+    row = cursor.execute("""
+        SELECT 
+            SUM(quantity * sold_price) AS total_dynamic,
+            SUM(quantity * base_price_at_sale) AS total_fixed,
+            SUM(quantity) AS total_units
+        FROM booking_events
+    """).fetchone()
+    
+    total_dynamic = row["total_dynamic"] or 0
+    total_fixed   = row["total_fixed"] or 0
+    lift          = total_dynamic - total_fixed
+    lift_pct      = (lift / total_fixed * 100) if total_fixed > 0 else 0
+    
+    # 日別の推移データ（直近7日間）
+    daily_rows = cursor.execute("""
+        SELECT 
+            date(booked_at) AS day,
+            SUM(quantity * sold_price) AS day_dynamic,
+            SUM(quantity * base_price_at_sale) AS day_fixed
+        FROM booking_events
+        GROUP BY day
+        ORDER BY day ASC
+    """).fetchall()
+    
+    conn.close()
+    
+    return {
+        "total_dynamic": total_dynamic,
+        "total_fixed":   total_fixed,
+        "lift":          lift,
+        "lift_pct":      round(lift_pct, 1),
+        "total_units":   row["total_units"] or 0,
+        "daily_data":    [dict(r) for r in daily_rows]
+    }
+
+
+def calculate_inventory_rescue_metrics() -> dict:
+    """切迫在庫の救済率を算出する"""
+    conn = get_conn()
+    cursor = conn.cursor()
+    
+    # 全体のパッケージ寄与率（救済の代理指標）
+    rescue_row = cursor.execute("""
+        SELECT 
+            SUM(CASE WHEN is_package = 1 THEN quantity ELSE 0 END) AS rescued_units,
+            SUM(quantity) AS total_units
+        FROM booking_events
+    """).fetchone()
+    
+    rescued_units = rescue_row["rescued_units"] or 0
+    total_units   = rescue_row["total_units"] or 1
+    
+    # 特にホテル（在庫リスクが高い傾向）に絞った集計
+    hotel_rescue = cursor.execute("""
+        SELECT 
+            SUM(CASE WHEN is_package = 1 THEN b.quantity ELSE 0 END) AS rescued,
+            SUM(b.quantity) AS total
+        FROM booking_events b
+        JOIN inventory i ON b.inventory_id = i.id
+        WHERE i.item_type = 'hotel'
+    """).fetchone()
+    
+    conn.close()
+    
+    return {
+        "overall_rescue_rate": round((rescued_units / total_units * 100), 1),
+        "rescued_units":       rescued_units,
+        "hotel_rescue_rate":   round((hotel_rescue["rescued"] / (hotel_rescue["total"] or 1) * 100), 1),
+        "total_units":         total_units
+    }
+
+
 # ─────────────────────────────────────────────────────────────
 # CLI 実行
 # ─────────────────────────────────────────────────────────────
