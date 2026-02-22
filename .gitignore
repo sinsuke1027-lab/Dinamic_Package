@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.venv/
+env/
+.env
+
+# Node.js
+node_modules/
+dist/
+build/
+.next/
+out/
+
+# Database
+*.db
+
+# OS
+.DS_Store
+
+# IDE
+.vscode/
+.idea/
+
+# Backend temporary/backup files
+backend/*.bak
+backend/tmp/
