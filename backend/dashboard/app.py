@@ -75,6 +75,9 @@ button[data-baseweb="tab"][aria-selected="true"] {
 .badge-low  { display:inline-block; background:rgba(74,222,128,.15); color:#4ade80;
               border:1px solid rgba(74,222,128,.4);
               border-radius:999px; padding:3px 14px; font-size:.8rem; font-weight:700; margin:2px; }
+.badge-brake { display:inline-block; background:rgba(251,191,36,.25); color:#fbbf24;
+               border:1px solid #fbbf24; box-shadow: 0 0 10px rgba(251,191,36,.3);
+               border-radius:999px; padding:2px 10px; font-size:.75rem; font-weight:900; margin-top:8px; }
 
 /* テキストボックス */
 .reason-box {
@@ -129,7 +132,7 @@ def load_history() -> pd.DataFrame:
         df["recorded_at"] = df["recorded_at"].dt.tz_convert("Asia/Tokyo")
     return df
 
-def get_pricing_results(inv_df: pd.DataFrame) -> list[dict]:
+def get_pricing_results(inv_df: pd.DataFrame, config: dict = None) -> list[dict]:
     import sys
     sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
     from pricing_engine import calculate_pricing_result
@@ -142,6 +145,7 @@ def get_pricing_results(inv_df: pd.DataFrame) -> list[dict]:
             total_stock     = int(row["total_stock"]),
             remaining_stock = int(row["remaining_stock"]),
             departure_date  = row.get("departure_date"),
+            config          = config,
         )
         results.append(r)
     return results
@@ -186,6 +190,30 @@ st.markdown("""
 </p>
 """, unsafe_allow_html=True)
 
+# ─── サイドバー: AI Command Center ───────────────────────────────
+with st.sidebar:
+    st.markdown("### 🎛 AI Command Center")
+    st.markdown("<p style='color:#94a3b8;font-size:.8rem'>AIの行動ルールをリアルタイム編集</p>", unsafe_allow_html=True)
+    
+    with st.expander("🛡 セーフティガード (上下限)", expanded=True):
+        max_discount = st.slider("最大割引率 (%)", 0, 80, 30, help="これ以上安くしない限界値")
+        max_markup   = st.slider("最大値上げ率 (%)", 0, 200, 50, help="需要超過時の値上げ上限")
+    
+    with st.expander("🚔 自動調整 (Velocity Brake)", expanded=True):
+        brake_threshold = st.slider("ブレーキ発動閾値", 1.0, 5.0, 1.5, 0.1, help="期待ペースの何倍でブレーキをかけるか")
+        brake_strength  = st.slider("ブレーキ強度 (%)", 0, 30, 5, help="ブレーキ時に上乗セする価格比率")
+
+    ai_config = {
+        "max_discount_pct": max_discount,
+        "max_markup_pct":   max_markup,
+        "brake_threshold":  brake_threshold,
+        "brake_strength_pct": brake_strength
+    }
+    
+    st.markdown("---")
+    if st.button("設定をデフォルトに戻す"):
+        st.session_state["reset_trigger"] = True # 簡易的なリセット実装
+
 # ─── データロード ─────────────────────────────────────────────────
 inv_df     = load_inventory()
 history_df = load_history()
@@ -194,7 +222,7 @@ if inv_df.empty:
     st.error("⚠️ 在庫データが見つかりません。`python init_db.py` を先に実行してください。")
     st.stop()
 
-results = get_pricing_results(inv_df)
+results = get_pricing_results(inv_df, config=ai_config)
 
 # ─── パッケージエンジン読み込み（全タブ共通） ─────────────────────
 import sys as _sys
@@ -238,6 +266,9 @@ with tab1:
             lead_str    = f"{r['lead_days']}日後" if r["lead_days"] is not None else "未設定"
             ratio_pct   = int(r["inv_ratio"] * 100)
             row_item    = inv_df.iloc[idx]
+            
+            brake_html = '<div class="badge-brake">🚔 AUTO BRAKE ACTIVE</div>' if r.get("is_brake_active") else ""
+            
             with cols[ci]:
                 st.markdown(f"""
 <div class="metric-card">
@@ -245,6 +276,7 @@ with tab1:
   <div class="metric-sub">{r['name']}</div>
   <div class="metric-value">¥{r['final_price']:,}</div>
   <div><span class="{badge_class}">{badge_text}</span></div>
+  {brake_html}
   <div class="metric-sub" style="margin-top:8px">
     残在庫 {row_item['remaining_stock']}/{row_item['total_stock']} ({ratio_pct}%)<br>
     出発まで <b>{lead_str}</b>

@@ -116,6 +116,7 @@ def calculate_pricing_result(
     remaining_stock: int,
     departure_date: Optional[str],
     reference_date: Optional[date] = None,
+    config: Optional[dict] = None,
 ) -> dict:
     """
     2軸加算モデルによる価格計算を行い、計算根拠付きの PricingResult を返す。
@@ -150,20 +151,51 @@ def calculate_pricing_result(
     else:
         time_adj, time_reason = 0, "出発日未設定のため時期調整なし"
 
-    # ── 最終価格（上下限: base × 0.7 〜 base × 1.5）────────────
-    theoretical = base_price + inv_adj + time_adj
+    # ── 設定パラメータの取得 ───────────────────────────────────────
+    conf = config or {}
+    max_discount = conf.get("max_discount_pct", 30) / 100.0   # 既定 30%
+    max_markup   = conf.get("max_markup_pct", 50) / 100.0     # 既定 50%
+    brake_threshold = conf.get("brake_threshold", 1.5)        # 既定 1.5x
+    brake_strength  = conf.get("brake_strength_pct", 5) / 100.0 # 既定 5%
+
+    # ── Velocity 自動ブレーキ ──────────────────────────────────────
+    vel_adj = 0
+    vel_reason = ""
+    is_brake_active = False
+
+    try:
+        from packaging_engine import get_velocity_ratio
+        vr = get_velocity_ratio(inventory_id, total_stock, remaining_stock, lead_days)
+        if vr and vr >= brake_threshold:
+            vel_adj = round(base_price * brake_strength)
+            vel_reason = f"販売ペース異常({vr:.1f}x)を検知。自動価格ブレーキを発動(+¥{vel_adj:,})"
+            is_brake_active = True
+        elif vr:
+            vel_reason = f"販売ペースは正常({vr:.1f}x)です"
+        else:
+            vel_reason = "販売速度データ不足"
+    except Exception:
+        vel_reason = "速度解析エラー"
+
+    # ── 最終価格（上下限: config に基づくクランプ）────────────
+    theoretical = base_price + inv_adj + time_adj + vel_adj
     final_price  = round(theoretical / 100) * 100          # 100円単位
-    final_price  = max(final_price, round(base_price * 0.7 / 100) * 100)
-    final_price  = min(final_price, round(base_price * 1.5 / 100) * 100)
+
+    min_p = round(base_price * (1.0 - max_discount) / 100) * 100
+    max_p = round(base_price * (1.0 + max_markup) / 100) * 100
+    
+    final_price = max(final_price, min_p)
+    final_price = min(final_price, max_p)
 
     # ── 理由文の合成 ─────────────────────────────────────────────
-    reason = f"{inv_reason}。{time_reason}。"
+    reason = f"{inv_reason}。{time_reason}。{vel_reason}。"
 
     # ウォーターフォールチャート用の構造化データ
     waterfall = [
         {"label": "基本価格", "value": base_price,  "measure": "absolute"},
         {"label": "在庫調整", "value": inv_adj,      "measure": "relative"},
         {"label": "時期調整", "value": time_adj,     "measure": "relative"},
+        {"label": "速度調整", "value": vel_adj,      "measure": "relative"},
         {"label": "最終価格", "value": final_price,  "measure": "total"},
     ]
 
@@ -179,6 +211,7 @@ def calculate_pricing_result(
         "departure_date":        departure_date,
         "reason":                reason,
         "waterfall":             waterfall,
+        "is_brake_active":       is_brake_active,
     }
 
 
