@@ -276,15 +276,11 @@ def generate_packages(reference_date: Optional[date] = None) -> list[dict]:
             reference_date  = today,
         )
 
-        # ── フライトの velocity 計算 ──────────────────────────────
-        f_vel_ratio = get_velocity_ratio(
-            inventory_id    = flight["id"],
-            total_stock     = flight["total_stock"],
-            remaining_stock = flight["remaining_stock"],
-            lead_days       = f_result["lead_days"],
-        )
-        f_vel_adj, f_vel_note = calc_velocity_adjustment(f_result["final_price"], f_vel_ratio)
-        f_adjusted_price = f_result["final_price"] + f_vel_adj
+        # ── フライトの velocity 取得（pricing_engine側ですでに加算済み） ──
+        f_vel_ratio = f_result["velocity_ratio"]
+        f_vel_adj   = f_result["velocity_adjustment"]
+        _, f_vel_note = calc_velocity_adjustment(f_result["base_price"], f_vel_ratio)
+        f_adjusted_price = f_result["final_price"]
 
         for hotel in hotels:
             h_result = calculate_pricing_result(
@@ -297,15 +293,11 @@ def generate_packages(reference_date: Optional[date] = None) -> list[dict]:
                 reference_date  = today,
             )
 
-            # ── ホテルの velocity 計算 ────────────────────────────
-            h_vel_ratio = get_velocity_ratio(
-                inventory_id    = hotel["id"],
-                total_stock     = hotel["total_stock"],
-                remaining_stock = hotel["remaining_stock"],
-                lead_days       = h_result["lead_days"],
-            )
-            h_vel_adj, h_vel_note = calc_velocity_adjustment(h_result["final_price"], h_vel_ratio)
-            h_adjusted_price = h_result["final_price"] + h_vel_adj
+            # ── ホテルの velocity 取得 ────────────────────────────
+            h_vel_ratio = h_result["velocity_ratio"]
+            h_vel_adj   = h_result["velocity_adjustment"]
+            _, h_vel_note = calc_velocity_adjustment(h_result["base_price"], h_vel_ratio)
+            h_adjusted_price = h_result["final_price"]
 
             # ── クロスセル割引（ホテルの velocity 調整後価格を基準）──
             urgency = hotel_urgency_score(
@@ -350,8 +342,10 @@ def generate_packages(reference_date: Optional[date] = None) -> list[dict]:
                 "rank":                     0,   # ソート後に付与
                 "flight_id":                flight["id"],
                 "flight_name":              flight["name"],
+                "flight_base":              flight["base_price"],
                 "hotel_id":                 hotel["id"],
                 "hotel_name":               hotel["name"],
+                "hotel_base":               hotel["base_price"],
                 # 各価格の内訳（加算モデル / ホワイトボックス）
                 "flight_dynamic_price":     f_result["final_price"],
                 "flight_velocity_ratio":    f_vel_ratio,

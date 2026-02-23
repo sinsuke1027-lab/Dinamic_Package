@@ -160,9 +160,8 @@ def calculate_pricing_result(
 
     # ── Velocity 自動ブレーキ ──────────────────────────────────────
     vel_adj = 0
-    vel_reason = ""
     is_brake_active = False
-
+    vr = None
     try:
         from packaging_engine import get_velocity_ratio
         vr = get_velocity_ratio(inventory_id, total_stock, remaining_stock, lead_days)
@@ -205,6 +204,8 @@ def calculate_pricing_result(
         "base_price":            base_price,
         "inventory_adjustment":  inv_adj,
         "time_adjustment":       time_adj,
+        "velocity_adjustment":   vel_adj,
+        "velocity_ratio":        vr,
         "final_price":           final_price,
         "inv_ratio":             round(inv_ratio, 3),
         "lead_days":             lead_days,
