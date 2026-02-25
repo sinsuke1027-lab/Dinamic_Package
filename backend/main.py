@@ -15,7 +15,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 # pricing_engine から計算関数をインポート
-from pricing_engine import calculate_dynamic_price
+from pricing_engine import calculate_pricing_result
 
 # ─────────────────────────────────────────
 # 定数
@@ -149,9 +149,15 @@ def get_inventory_list():
         remaining = row["remaining_stock"]
         if remaining <= 0:
             continue  # 品切れは非表示
-        dynamic_price = calculate_dynamic_price(
-            row["base_price"], row["total_stock"], remaining
+        pricing = calculate_pricing_result(
+            inventory_id    = row["id"],
+            name            = row["name"],
+            base_price      = row["base_price"],
+            total_stock     = row["total_stock"],
+            remaining_stock = remaining,
+            departure_date  = row.get("departure_date")
         )
+        dynamic_price = pricing["final_price"]
         result.append({
             "id": row["id"],
             "item_type": row["item_type"],
@@ -176,9 +182,15 @@ def get_inventory_detail(inventory_id: int):
     if not row:
         raise HTTPException(status_code=404, detail="指定された在庫が見つかりません")
 
-    dynamic_price = calculate_dynamic_price(
-        row["base_price"], row["total_stock"], row["remaining_stock"]
+    pricing = calculate_pricing_result(
+        inventory_id    = row["id"],
+        name            = row["name"],
+        base_price      = row["base_price"],
+        total_stock     = row["total_stock"],
+        remaining_stock = row["remaining_stock"],
+        departure_date  = row.get("departure_date")
     )
+    dynamic_price = pricing["final_price"]
     return {
         "id": row["id"],
         "item_type": row["item_type"],
@@ -202,9 +214,15 @@ def admin_get_inventory_list():
 
     result = []
     for row in rows:
-        dynamic_price = calculate_dynamic_price(
-            row["base_price"], row["total_stock"], row["remaining_stock"]
+        pricing = calculate_pricing_result(
+            inventory_id    = row["id"],
+            name            = row["name"],
+            base_price      = row["base_price"],
+            total_stock     = row["total_stock"],
+            remaining_stock = row["remaining_stock"],
+            departure_date  = row.get("departure_date")
         )
+        dynamic_price = pricing["final_price"]
         multiplier = dynamic_price / row["base_price"] if row["base_price"] > 0 else 1.0
         result.append({
             "id": row["id"],
@@ -294,10 +312,15 @@ def create_price_session(payload: SessionCreate):
         conn.close()
         raise HTTPException(status_code=409, detail="この商品は品切れです")
 
-    # 現時点の動的価格をスナップショット
-    price_snapshot = calculate_dynamic_price(
-        row["base_price"], row["total_stock"], row["remaining_stock"]
+    pricing = calculate_pricing_result(
+        inventory_id    = row["id"],
+        name            = row["name"],
+        base_price      = row["base_price"],
+        total_stock     = row["total_stock"],
+        remaining_stock = row["remaining_stock"],
+        departure_date  = row.get("departure_date")
     )
+    price_snapshot = pricing["final_price"]
     now = datetime.now(timezone.utc)
     expires_at = now + timedelta(minutes=PRICE_SESSION_DURATION_MINUTES)
     token = str(uuid.uuid4())

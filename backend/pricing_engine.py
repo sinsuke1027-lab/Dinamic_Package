@@ -25,8 +25,14 @@ Explainable Pricing Engine（説明可能な価格設定エンジン）。
 """
 
 import sqlite3
+import math
 from datetime import date, datetime, timezone
 from typing import Optional
+
+from constants import (
+    MAX_DISCOUNT_PCT, MAX_MARKUP_PCT, 
+    BRAKE_THRESHOLD, BRAKE_STRENGTH_PCT
+)
 
 DATABASE = 'inventory.db'
 
@@ -105,6 +111,55 @@ def calc_time_adjustment(base_price: int, lead_days: int) -> tuple[int, str]:
 
 
 # ─────────────────────────────────────────
+# 在庫資産価値の減衰（崖っぷち型カーブ）
+# ─────────────────────────────────────────
+
+def calculate_inventory_decay_factor(lead_days: int, total_lead_days: int, k: float = 20.0, p: float = 0.12) -> float:
+    """
+    在庫の残存価値係数を、シグモイド関数の反転（ロジスティック関数）を用いて計算する。
+    
+    Args:
+        lead_days:       出発までの残り日数 (Day X)
+        total_lead_days: 全体のリードタイム (Day max)
+        k:               急落の鋭さ (Steepness)
+        p:               崖っぷちの発生ポイント (0.0=出発日, 1.0=予約開始日。例: 0.12 なら残り12%から急落)
+        
+    Returns:
+        0.0〜1.0 の係数
+    """
+    if lead_days <= 0:
+        return 0.0
+    if total_lead_days <= 0:
+        return 1.0
+        
+    # 正規化した残り日数 (1.0 = 遠い未来, 0.0 = 出発当日)
+    x = lead_days / total_lead_days
+    
+    # ロジスティック関数の反転: 1 / (1 + exp(-k * (x - p)))
+    # これにより、x=p 付近で 1.0 から 0.0 へ急激に変化する
+    try:
+        exp_val = math.exp(-k * (x - p))
+        decay = 1.0 / (1.0 + exp_val)
+    except OverflowError:
+        decay = 0.0 if (-k * (x - p)) > 0 else 1.0
+    
+    # 精度調整: x=1.0（初期）でほぼ 1.0、x=0.0（最終）でほぼ 0.0 になるようにスケーリング
+    try:
+        f_high = 1.0 / (1.0 + math.exp(-k * (1.0 - p)))
+        f_low  = 1.0 / (1.0 + math.exp(-k * (0.0 - p)))
+    except OverflowError:
+        f_high = 1.0
+        f_low = 0.0
+
+    # ゼロ除算回避
+    if f_high == f_low:
+        return 1.0
+        
+    normalized_decay = (decay - f_low) / (f_high - f_low)
+    return max(0.0, min(1.0, normalized_decay))
+
+
+# ─────────────────────────────────────────
 # メイン: PricingResult を生成する
 # ─────────────────────────────────────────
 
@@ -153,10 +208,10 @@ def calculate_pricing_result(
 
     # ── 設定パラメータの取得 ───────────────────────────────────────
     conf = config or {}
-    max_discount = conf.get("max_discount_pct", 30) / 100.0   # 既定 30%
-    max_markup   = conf.get("max_markup_pct", 50) / 100.0     # 既定 50%
-    brake_threshold = conf.get("brake_threshold", 1.5)        # 既定 1.5x
-    brake_strength  = conf.get("brake_strength_pct", 5) / 100.0 # 既定 5%
+    max_discount = conf.get("max_discount_pct", MAX_DISCOUNT_PCT * 100) / 100.0
+    max_markup   = conf.get("max_markup_pct", MAX_MARKUP_PCT * 100) / 100.0
+    brake_threshold = conf.get("brake_threshold", BRAKE_THRESHOLD)
+    brake_strength  = conf.get("brake_strength_pct", BRAKE_STRENGTH_PCT * 100) / 100.0
 
     # ── Velocity 自動ブレーキ ──────────────────────────────────────
     vel_adj = 0
@@ -242,26 +297,6 @@ def calculate_all() -> list[dict]:
     return results
 
 
-# ─────────────────────────────────────────
-# 旧 API との互換ラッパー（他モジュールから呼べるよう残す）
-# ─────────────────────────────────────────
-
-def calculate_dynamic_price(
-    base_price: int,
-    total_stock: int,
-    remaining_stock: int,
-    departure_date: Optional[str] = None,
-) -> int:
-    """最終価格のみを返すシンプルなラッパー（後方互換用）"""
-    result = calculate_pricing_result(
-        inventory_id    = 0,
-        name            = "",
-        base_price      = base_price,
-        total_stock     = total_stock,
-        remaining_stock = remaining_stock,
-        departure_date  = departure_date,
-    )
-    return result['final_price']
 
 
 # ─────────────────────────────────────────
