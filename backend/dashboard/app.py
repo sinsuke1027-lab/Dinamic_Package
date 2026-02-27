@@ -288,7 +288,7 @@ if selected_tab == "📈 Executive Summary":
     st.caption("ROI・売上推移グラフの集計対象期間")
     
     # booking_events の最小・最大日付を概算で取得
-    min_date_val = datetime.now(timezone.utc).date() - timedelta(days=180) # デフォルト安全値
+    min_date_val = datetime.now(timezone.utc).date() - timedelta(days=90) # デフォルト安全値
     max_date_val = datetime.now(timezone.utc).date()
     # 実際はクエリで最小値をとるのが正確ですが、デモでは固定範囲でUI提供します
     
@@ -872,8 +872,8 @@ if selected_tab == "🧪 Custom Simulator":
         h_stock = target_hotel["remaining_stock"]
         f_stock = target_flight["remaining_stock"]
         
-        h_cost = target_hotel["base_price"] * 0.7 # 仮の原価
-        f_cost = target_flight["base_price"] * 0.7
+        h_cost = target_hotel["base_price"] * 0.9 # 仮の原価
+        f_cost = target_flight["base_price"] * 0.9
         
         h_unit_profit_standalone = h_pricing["final_price"] - h_cost
         f_unit_profit_standalone = f_pricing["final_price"] - f_cost
@@ -986,7 +986,7 @@ if selected_tab == "🧪 Custom Simulator":
             "base_price": target_hotel["base_price"],
             "current_price": h_pricing["final_price"],
             "original_price": target_hotel.get("current_price", target_hotel["base_price"]),
-            "cost": int(target_hotel["base_price"] * 0.7),
+            "cost": int(target_hotel["base_price"] * 0.9),
             "elasticity": target_hotel.get("elasticity", -1.5)
         }
         f_item_sim = {
@@ -996,7 +996,7 @@ if selected_tab == "🧪 Custom Simulator":
             "base_price": target_flight["base_price"],
             "current_price": f_pricing["final_price"],
             "original_price": target_flight.get("current_price", target_flight["base_price"]),
-            "cost": int(target_flight["base_price"] * 0.7),
+            "cost": int(target_flight["base_price"] * 0.9),
             "velocity_ratio": f_pricing.get("velocity_ratio") or 1.0,
             "elasticity": target_flight.get("elasticity", -1.5)
         }
@@ -1018,22 +1018,24 @@ if selected_tab == "🧪 Custom Simulator":
         potential_waste_b = [h["potential_waste_b"] for h in history]
 
         # ─── 過去実績の集計 (販売開始日〜基準日) ───
-        # 1. 販売開始日の特定 (ホテルとフライトのうち早い方)
+        # 1. 販売開始日の特定とリードタイム算出
         dep_dt = pd.to_datetime(target_hotel.get("departure_date", "") or target_flight.get("departure_date", ""))
-        h_proc_str = target_hotel.get("procurement_date")
-        f_proc_str = target_flight.get("procurement_date")
-        if h_proc_str and f_proc_str:
-            proc_dt = min(pd.to_datetime(h_proc_str), pd.to_datetime(f_proc_str))
-        else:
-            proc_dt = dep_dt - timedelta(days=90) # fail-safe
-            
-        v_today_dt = pd.to_datetime(v_today)
         
-        # 過去日数の計算
-        total_lead_days = (dep_dt.date() - proc_dt.date()).days
-        past_days = (v_today_dt.date() - proc_dt.date()).days
-        if past_days < 0:
-            past_days = 0
+        try:
+            h_proc_dt = pd.to_datetime(target_hotel.get("procurement_date"))
+            h_lead = (dep_dt.date() - h_proc_dt.date()).days
+        except Exception:
+            h_lead = 90
+            
+        try:
+            f_proc_dt = pd.to_datetime(target_flight.get("procurement_date"))
+            f_lead = (dep_dt.date() - f_proc_dt.date()).days
+        except Exception:
+            f_lead = 90
+
+        total_lead_days = max(h_lead, f_lead)
+        
+        v_today_dt = pd.to_datetime(v_today)
             
         # 過去時系列用配列の初期化
         past_x = []
@@ -1054,7 +1056,7 @@ if selected_tab == "🧪 Custom Simulator":
             past_events_f = pd.DataFrame()
         
         # 初期状態
-        total_initial_cost = (target_hotel["total_stock"] * target_hotel["base_price"] * 0.7) + (target_flight["total_stock"] * target_flight["base_price"] * 0.7)
+        total_initial_cost = (target_hotel["total_stock"] * target_hotel["base_price"] * 0.9) + (target_flight["total_stock"] * target_flight["base_price"] * 0.9)
         cum_rev = 0
         cum_rev_h = 0
         cum_rev_f = 0
@@ -1078,34 +1080,49 @@ if selected_tab == "🧪 Custom Simulator":
             current_date_str = current_date_dt.strftime("%Y-%m-%d")
             past_x.append(f"D-{d}")
             
-            # その日の売上・消化を追加
-            if not past_events_h.empty:
-                day_sales_h = past_events_h[past_events_h["booked_date_str"] == current_date_str]
-                sales_val_h = day_sales_h["sold_price"].sum()
-                cum_rev += sales_val_h
-                cum_rev_h += sales_val_h
-                current_h_stk -= day_sales_h["quantity"].sum()
+            # ホテルの集計 (販売開始日以降のみ記録)
+            if d <= h_lead:
+                if not past_events_h.empty:
+                    day_sales_h = past_events_h[past_events_h["booked_date_str"] == current_date_str]
+                    sales_val_h = day_sales_h["sold_price"].sum()
+                    cum_rev += sales_val_h
+                    cum_rev_h += sales_val_h
+                    current_h_stk -= day_sales_h["quantity"].sum()
+                past_revenue_h.append(cum_rev_h)
+            else:
+                past_revenue_h.append(None)
                 
-            if not past_events_f.empty:
-                day_sales_f = past_events_f[past_events_f["booked_date_str"] == current_date_str]
-                sales_val_f = day_sales_f["sold_price"].sum()
-                cum_rev += sales_val_f
-                cum_rev_f += sales_val_f
-                current_f_stk -= day_sales_f["quantity"].sum()
+            # フライトの集計 (販売開始日以降のみ記録)
+            if d <= f_lead:
+                if not past_events_f.empty:
+                    day_sales_f = past_events_f[past_events_f["booked_date_str"] == current_date_str]
+                    sales_val_f = day_sales_f["sold_price"].sum()
+                    cum_rev += sales_val_f
+                    cum_rev_f += sales_val_f
+                    current_f_stk -= day_sales_f["quantity"].sum()
+                past_revenue_f.append(cum_rev_f)
+            else:
+                past_revenue_f.append(None)
                 
-            past_revenue.append(cum_rev)
-            past_revenue_h.append(cum_rev_h)
-            past_revenue_f.append(cum_rev_f)
-            
-            # 日次の含み損
-            pw = (current_h_stk * target_hotel["base_price"] * 0.7) + (current_f_stk * target_flight["base_price"] * 0.7)
-            past_potential_waste.append(pw)
+            # 全体合算と含み損
+            if d <= max(h_lead, f_lead):
+                past_revenue.append(cum_rev)
+                pw = (current_h_stk * target_hotel["base_price"] * 0.9) + (current_f_stk * target_flight["base_price"] * 0.9)
+                past_potential_waste.append(pw)
+            else:
+                past_revenue.append(None)
+                past_potential_waste.append(None)
 
         # ─── スライスされた履歴データと合体 ───
-        # ※未来予測は、過去の最終日の売上を引き継ぐ必要があるためオフセットを加算
-        offset_rev = past_revenue[-1] if past_revenue else 0
-        offset_rev_h = past_revenue_h[-1] if past_revenue_h else 0
-        offset_rev_f = past_revenue_f[-1] if past_revenue_f else 0
+        def get_last_valid(lst):
+            for item in reversed(lst):
+                if item is not None:
+                    return item
+            return 0
+            
+        offset_rev = get_last_valid(past_revenue)
+        offset_rev_h = get_last_valid(past_revenue_h)
+        offset_rev_f = get_last_valid(past_revenue_f)
 
         scenario_a_revenue = [r + offset_rev for r in [h["revenue_a"] for h in history]]
         scenario_b_revenue = [r + offset_rev for r in [h["revenue_b"] for h in history]]
@@ -1122,19 +1139,19 @@ if selected_tab == "🧪 Custom Simulator":
         # full_x の生成の際、重複を防ぐため調整
         if past_x:
             days_x_bridged = [past_x[-1]] + days_x
-            scenario_a_revenue = [past_revenue[-1]] + scenario_a_revenue
-            scenario_b_revenue = [past_revenue[-1]] + scenario_b_revenue
-            scenario_n_revenue = [past_revenue[-1]] + scenario_n_revenue
+            scenario_a_revenue = [get_last_valid(past_revenue)] + scenario_a_revenue
+            scenario_b_revenue = [get_last_valid(past_revenue)] + scenario_b_revenue
+            scenario_n_revenue = [get_last_valid(past_revenue)] + scenario_n_revenue
             
-            scenario_a_rev_h = [past_revenue_h[-1]] + scenario_a_rev_h
-            scenario_a_rev_f = [past_revenue_f[-1]] + scenario_a_rev_f
-            scenario_b_rev_h = [past_revenue_h[-1]] + scenario_b_rev_h
-            scenario_b_rev_f = [past_revenue_f[-1]] + scenario_b_rev_f
-            scenario_n_rev_h = [past_revenue_h[-1]] + scenario_n_rev_h
-            scenario_n_rev_f = [past_revenue_f[-1]] + scenario_n_rev_f
+            scenario_a_rev_h = [get_last_valid(past_revenue_h)] + scenario_a_rev_h
+            scenario_a_rev_f = [get_last_valid(past_revenue_f)] + scenario_a_rev_f
+            scenario_b_rev_h = [get_last_valid(past_revenue_h)] + scenario_b_rev_h
+            scenario_b_rev_f = [get_last_valid(past_revenue_f)] + scenario_b_rev_f
+            scenario_n_rev_h = [get_last_valid(past_revenue_h)] + scenario_n_rev_h
+            scenario_n_rev_f = [get_last_valid(past_revenue_f)] + scenario_n_rev_f
             
-            potential_waste_a = [past_potential_waste[-1]] + potential_waste_a
-            potential_waste_b = [past_potential_waste[-1]] + potential_waste_b
+            potential_waste_a = [get_last_valid(past_potential_waste)] + potential_waste_a
+            potential_waste_b = [get_last_valid(past_potential_waste)] + potential_waste_b
         else:
             days_x_bridged = days_x
         
@@ -1154,18 +1171,14 @@ if selected_tab == "🧪 Custom Simulator":
         total_costs_line = [total_initial_cost] * len(full_x)
 
         # KPI用数値の抽出
-        res_a = sim_res["profit_a"] + offset_rev # 修正：過去の利益（売上ー原価）を加味すべきだが、簡略化のため最終着地は全体の利益
-        # ※正確な着地利益は = 総売上 - 総仕入原価 - 最終廃棄損 - 逸失利益
         final_revenue_a = full_rev_a[-1]
         final_revenue_b = full_rev_b[-1]
         final_waste_a = full_waste_a[-1]
         final_waste_b = full_waste_b[-1]
         
-        total_cost_a = int((target_hotel["total_stock"] - history[-1]["h_stock_a"]) * h_item_sim["cost"]) + int((target_flight["total_stock"] - history[-1]["f_stock_a"]) * f_item_sim["cost"]) + int(offset_rev/2)
-        
-        # 利益指標の再計算
+        # 利益指標の再計算 (最終着地利益 = 全体最終売上 - 全体総仕入原価 - 機会損失)
         res_a = final_revenue_a - total_initial_cost
-        res_b = final_revenue_b - total_initial_cost - sim_res["details_b"]["discount_loss"] - sim_res["details_b"]["cannibal_loss"]
+        res_b = final_revenue_b - total_initial_cost - sim_res["details_b"].get("discount_loss", 0) - sim_res["details_b"].get("cannibal_loss", 0)
 
         total_sold_b_pkg = sim_res["packages_sold"]
         curr_b_h_stock = history[-1]["h_stock_b"] if history else h_stock
@@ -1388,12 +1401,18 @@ if selected_tab == "🧪 Custom Simulator":
         
         with tab_pl:
             st.markdown("シナリオA（単品維持）とシナリオB（ハイブリッド戦略）の収支構造の違いを比較します。")
+            
+            # P/L詳細の表示も全体の最終売上等を反映する
+            det_a_rev = final_revenue_a
+            det_b_rev = final_revenue_b
+            
+            # 各シナリオの実質的な原価（売れた分の原価＋廃棄になった分の原価）は「総仕入原価と同じ」
             pl_data = [
-                {"項目": "① 総売上額", "シナリオA": f"¥{det_a['revenue']:,}", "シナリオB": f"¥{det_b['revenue']:,}", "差分 (B - A)": f"¥{det_b['revenue'] - det_a['revenue']:,}"},
-                {"項目": "② 仕入原価 (販売分・廃棄分合計)", "シナリオA": f"-¥{det_a['cost'] + det_a['waste']:,}", "シナリオB": f"-¥{det_b['cost'] + det_b['waste']:,}", "差分 (B - A)": f"¥{(det_a['cost'] + det_a['waste']) - (det_b['cost'] + det_b['waste']):,}"},
-                {"項目": "③ 廃棄損 (売れ残り分)", "シナリオA": f"-¥{det_a['waste']:,}", "シナリオB": f"-¥{det_b['waste']:,}", "差分 (B - A)": f"¥{det_a['waste'] - det_b['waste']:,} (ロス回避)"},
-                {"項目": "④ 各種割引・逸失利益等", "シナリオA": "¥0", "シナリオB": f"-¥{det_b['discount_loss'] + det_b['cannibal_loss']:,}", "差分 (B - A)": f"-¥{det_b['discount_loss'] + det_b['cannibal_loss']:,}"},
-                {"項目": "⭐ 最終着地利益", "シナリオA": f"¥{res_a:,}", "シナリオB": f"¥{res_b:,}", "差分 (B - A)": f"¥{res_b - res_a:,}"},
+                {"項目": "① 累計総売上額", "シナリオA": f"¥{int(det_a_rev):,}", "シナリオB": f"¥{int(det_b_rev):,}", "差分 (B - A)": f"¥{int(det_b_rev - det_a_rev):,}"},
+                {"項目": "② 総仕入原価 (固定)", "シナリオA": f"-¥{int(total_initial_cost):,}", "シナリオB": f"-¥{int(total_initial_cost):,}", "差分 (B - A)": "¥0"},
+                {"項目": "③ 内、廃棄損 (売れ残り分)", "シナリオA": f"(-¥{int(final_waste_a):,})", "シナリオB": f"(-¥{int(final_waste_b):,})", "差分 (B - A)": f"¥{int(final_waste_a - final_waste_b):,} (ロス回避)"},
+                {"項目": "④ 各種割引・逸失利益等", "シナリオA": "¥0", "シナリオB": f"-¥{int(sim_res['details_b'].get('discount_loss', 0) + sim_res['details_b'].get('cannibal_loss', 0)):,}", "差分 (B - A)": f"-¥{int(sim_res['details_b'].get('discount_loss', 0) + sim_res['details_b'].get('cannibal_loss', 0)):,}"},
+                {"項目": "⭐ 最終着地利益", "シナリオA": f"¥{int(res_a):,}", "シナリオB": f"¥{int(res_b):,}", "差分 (B - A)": f"¥{int(res_b - res_a):,}"},
             ]
             st.dataframe(pd.DataFrame(pl_data), use_container_width=True, hide_index=True)
 

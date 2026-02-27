@@ -4,7 +4,7 @@ constants.py
 """
 
 # 原価計算関連
-DEFAULT_COST_RATIO = 0.70  # 標準的な原価率 (70%)
+DEFAULT_COST_RATIO = 0.90  # 標準的な原価率 (90%)
 
 # 需要予測係数 (calculate_demand_forecast)
 FORECAST_MULTIPLIERS = {

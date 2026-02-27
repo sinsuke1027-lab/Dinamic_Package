@@ -54,7 +54,7 @@ PRODUCT_MASTERS = [
         "base_price": 120_000,
         "total_stock": 20,
         "sell_thru_ratio": 0.70,  # 高単価なので70%でも優良
-        "procurement_days_before": 180,
+        "procurement_days_before": 90,
         "alpha": 1.2, "beta": 6.0,   # 早期（仕入れ直後）に集中
         "elasticity": -0.8,        # 高価格帯は価格変化に鈍感
     },
@@ -64,7 +64,7 @@ PRODUCT_MASTERS = [
         "base_price": 75_000,
         "total_stock": 40,
         "sell_thru_ratio": 0.88,
-        "procurement_days_before": 150,
+        "procurement_days_before": 75,
         "alpha": 2.0, "beta": 4.0,   # やや早期寄り
         "elasticity": -1.2,        # やや鈍感
     },
@@ -74,7 +74,7 @@ PRODUCT_MASTERS = [
         "base_price": 45_000,
         "total_stock": 60,
         "sell_thru_ratio": 0.85,
-        "procurement_days_before": 120,
+        "procurement_days_before": 60,
         "alpha": 2.5, "beta": 2.5,   # 均等分布
         "elasticity": -1.8,        # 標準的〜やや敏感
     },
@@ -84,7 +84,7 @@ PRODUCT_MASTERS = [
         "base_price": 18_000,
         "total_stock": 80,
         "sell_thru_ratio": 0.60,   # 格安でも売れ残りリスク大
-        "procurement_days_before": 60,
+        "procurement_days_before": 30,
         "alpha": 6.0, "beta": 1.2,   # 直前に集中
         "elasticity": -2.5,        # 非常に敏感（安いから買う層）
     },
@@ -95,7 +95,7 @@ PRODUCT_MASTERS = [
         "base_price": 95_000,
         "total_stock": 120,
         "sell_thru_ratio": 0.97,   # ほぼ完売
-        "procurement_days_before": 180,
+        "procurement_days_before": 90,
         "alpha": 1.0, "beta": 5.0,   # 早期集中（人気路線）
         "elasticity": -0.5,        # 人気路線は価格に非弾力的（代えが利かない）
     },
@@ -105,7 +105,7 @@ PRODUCT_MASTERS = [
         "base_price": 72_000,
         "total_stock": 90,
         "sell_thru_ratio": 0.85,
-        "procurement_days_before": 150,
+        "procurement_days_before": 75,
         "alpha": 2.0, "beta": 3.0,
         "elasticity": -1.0,
     },
@@ -115,7 +115,7 @@ PRODUCT_MASTERS = [
         "base_price": 68_000,
         "total_stock": 70,
         "sell_thru_ratio": 0.70,   # 売れ残りリスク中
-        "procurement_days_before": 120,
+        "procurement_days_before": 60,
         "alpha": 3.0, "beta": 2.5,
         "elasticity": -1.5,
     },
@@ -125,7 +125,7 @@ PRODUCT_MASTERS = [
         "base_price": 55_000,
         "total_stock": 50,
         "sell_thru_ratio": 0.45,   # 売れ残りリスク大
-        "procurement_days_before": 90,
+        "procurement_days_before": 45,
         "alpha": 5.0, "beta": 1.5,   # 直前集中
         "elasticity": -2.0,        # ニッチ需要、安ければ動く
     },
@@ -213,7 +213,9 @@ def init_db():
         dep_str = dep_day.strftime('%Y-%m-%d')
 
         for pm in PRODUCT_MASTERS:
-            proc_day = dep_day - timedelta(days=pm["procurement_days_before"])
+            # 販売開始時点をランダムにする (例: 70日〜110日前)
+            actual_proc_days = random.randint(70, 110)
+            proc_day = dep_day - timedelta(days=actual_proc_days)
             proc_str = proc_day.strftime('%Y-%m-%d')
 
             # 出発日に応じた「残在庫」を算出
@@ -276,18 +278,20 @@ def populate_booking_events(conn, all_inv: list[dict]):
             proc_dt = datetime.strptime(procurement_date_str, '%Y-%m-%d')
             dep_dt  = datetime.strptime(departure_date_str,  '%Y-%m-%d')
         except Exception:
-            proc_dt = TODAY - timedelta(days=180)
+            proc_dt = TODAY - timedelta(days=90)
             dep_dt  = TODAY + timedelta(days=30)
 
-        window_days = max(1, (dep_dt - proc_dt).days)
-        # betavariate: 0〜1の値で予約タイミングを決定
-        t = random.betavariate(alpha, beta)
-        booking_dt = proc_dt + timedelta(days=int(t * window_days))
-
-        # 仕入日より前、出発日より後にはならないようにクリップ
-        booking_dt = max(proc_dt, min(dep_dt - timedelta(days=1), booking_dt))
-        # まだ来ていない未来の予約は生成しない
-        booking_dt = min(booking_dt, TODAY)
+        # 販売開始日(proc_dt) から 現在(TODAY) または 出発日(dep_dt) までの販売可能期間
+        end_dt = min(dep_dt, TODAY)
+        total_seconds = (end_dt - proc_dt).total_seconds()
+        
+        if total_seconds <= 0:
+            booking_dt = proc_dt
+        else:
+            # random.betavariate(alpha, beta) は 0.0 ~ 1.0 の値を返す
+            # 商品マスターの設定(alpha, beta)により、販売初期〜直前のどこで売れやすいか波が決まる
+            random_fraction = random.betavariate(alpha, beta)
+            booking_dt = proc_dt + timedelta(seconds=total_seconds * random_fraction)
 
         # 時刻をランダムにずらす（HH:MM:SS）
         booking_dt = booking_dt.replace(
@@ -297,6 +301,10 @@ def populate_booking_events(conn, all_inv: list[dict]):
             tzinfo=timezone.utc
         )
         return booking_dt.isoformat()
+
+    # ── 在庫上限管理のための辞書 ──
+    # id をキーに、現在生成可能な残在庫数を保持する
+    remaining_stocks = { inv["id"]: inv["total_stock"] for inv in all_inv }
 
     # ── 1. パッケージ予約の生成 ────────────────────────────────────
     # 出発日バッチごとに処理
@@ -308,7 +316,6 @@ def populate_booking_events(conn, all_inv: list[dict]):
 
         for f_inv in batch_flights:
             f_pm = get_pm(f_inv["name"])
-            # フライトのPRODUCT_MASTERリストでのインデックス（4〜7）
             f_idx = PRODUCT_MASTERS.index(f_pm)
 
             for h_inv in batch_hotels:
@@ -317,18 +324,27 @@ def populate_booking_events(conn, all_inv: list[dict]):
 
                 affinity = PACKAGE_AFFINITY.get((f_idx, h_idx), 0.5)
 
-                # 相性スコアに基づいて生成件数を決定
-                # 相性2.5 → 最大50件、相性0.3 → 最大5件程度
-                n_bookings = int(affinity * 20 * random.uniform(0.7, 1.3))
-                # 過去バッチは1.0、未来は期間に応じて減衰
-                window_bonus = {1: 0.3, 3: 0.5, 10: 0.8, 30: 1.0}
-                if batch["offset"] <= 0:
-                    n_bookings = int(n_bookings * 1.0)
-                else:
-                    n_bookings = int(n_bookings * window_bonus.get(batch["offset"], 1.0))
+                # 相性スコアに基づいてベースとなる購入意欲を算出
+                base_demand = int(affinity * 20 * random.uniform(0.7, 1.3))
+                
+                # パッケージが占有する在庫の上限を、お互いの(現在の残在庫)の小さい方にする
+                # かつ、全体の一定量（例：40%）以上はパッケージで食いつぶさないように制限
+                max_pkg_alloc = min(
+                    remaining_stocks[f_inv["id"]],
+                    remaining_stocks[h_inv["id"]],
+                    int(f_inv["total_stock"] * 0.4),
+                    int(h_inv["total_stock"] * 0.4)
+                )
+
+                n_bookings = min(base_demand, max_pkg_alloc)
+                
+                if n_bookings <= 0:
+                    continue
 
                 for _ in range(n_bookings):
-                    # フライトと相性の平均alpha/betaでランダム予約日を生成
+                    if remaining_stocks[f_inv["id"]] <= 0 or remaining_stocks[h_inv["id"]] <= 0:
+                        break # 念のため
+
                     alpha = (f_pm["alpha"] + h_pm["alpha"]) / 2
                     beta  = (f_pm["beta"]  + h_pm["beta"])  / 2
 
@@ -347,28 +363,36 @@ def populate_booking_events(conn, all_inv: list[dict]):
                     h_price = int(h_inv["base_price"] * random.uniform(0.9, 1.05) / 100) * 100 - discount
                     h_price = max(0, h_price)
 
-                    # フライトのパッケージ予約
+                    # 予約追加
                     cursor.execute(
                         "INSERT INTO booking_events "
                         "(inventory_id, partner_id, booked_at, quantity, sold_price, base_price_at_sale, is_package, discount_amount) "
                         "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
                         (f_inv["id"], h_inv["id"], booked_at, 1, f_price, f_inv["base_price"], 1, 0)
                     )
-                    # ホテルのパッケージ予約（割引あり）
                     cursor.execute(
                         "INSERT INTO booking_events "
                         "(inventory_id, partner_id, booked_at, quantity, sold_price, base_price_at_sale, is_package, discount_amount) "
                         "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
                         (h_inv["id"], f_inv["id"], booked_at, 1, h_price, h_inv["base_price"], 1, discount)
                     )
+                    
+                    remaining_stocks[f_inv["id"]] -= 1
+                    remaining_stocks[h_inv["id"]] -= 1
                     total_inserted += 2
 
     # ── 2. 単品予約の生成 ──────────────────────────────────────────
     for inv in all_inv:
         pm = get_pm(inv["name"])
-        # 単品予約件数 = 総在庫の（販売率 × 50%）を単品予約と想定
-        n_solo = int(inv["total_stock"] * pm["sell_thru_ratio"] * 0.5 * random.uniform(0.8, 1.2))
-        n_solo = max(3, n_solo)  # 最低3件
+        
+        # 単品は、現在の残在庫の中から、さらに sell_thru_ratio % の売上到達を目標にする
+        target_qty = int(inv["total_stock"] * pm["sell_thru_ratio"] * random.uniform(0.8, 1.2))
+        
+        # 実際に単品として生成できる最大数（残在庫か、ターゲット数から既に売れた分を引いた数か）
+        already_sold = inv["total_stock"] - remaining_stocks[inv["id"]]
+        solo_target = max(1, target_qty - already_sold)
+        
+        n_solo = min(solo_target, remaining_stocks[inv["id"]])
 
         for _ in range(n_solo):
             booked_at = random_booking_date(

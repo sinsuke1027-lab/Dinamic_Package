@@ -135,13 +135,13 @@ def calc_demand_based_pricing(
     # 2. 現在の販売ペース (Current Velocity) 直近の販売実績から
     try:
         from packaging_engine import calculate_demand_forecast
-        cost = int(base_price * 0.7)
+        cost = int(base_price * 0.9)
         forecasts = calculate_demand_forecast(
             inventory_id, lead_days, remaining_stock, total_stock, base_price, cost, reference_date=reference_date
         )
         current_velocity = forecasts["base"]["daily_pace"]
     except Exception:
-        current_velocity = (total_stock - remaining_stock) / max(1, (180 - lead_days))
+        current_velocity = (total_stock - remaining_stock) / max(1, (90 - lead_days))
 
     current_velocity = max(0.01, current_velocity)
 
@@ -311,8 +311,8 @@ def calculate_pricing_result(
                 inventory_id, base_price, total_stock, remaining_stock, lead_days, elasticity=elasticity, reference_date=reference_date
             )
             # 崖っぷち減衰(Time Decay)
-            # 全体のリードタイムを180日として計算
-            decay = calculate_inventory_decay_factor(lead_days, 180, k=20.0, p=0.08)
+            # 全体のリードタイムを90日として計算
+            decay = calculate_inventory_decay_factor(lead_days, 90, k=20.0, p=0.08)
             target_price = base_price + demand_adj
             decay_adj = int(target_price * decay - target_price)
             
