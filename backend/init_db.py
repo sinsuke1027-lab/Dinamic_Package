@@ -24,6 +24,12 @@ TODAY = datetime(2026, 2, 25)  # ローカル時刻の「今日」
 
 # ─── 出発日バッチ定義 ──────────────────────────────────────────────
 DEPARTURE_BATCHES = [
+    # 完了済み（過去）のバッチ。販売履歴の機械学習/分析用データ
+    {"label": "Past-90", "offset": -90},
+    {"label": "Past-60", "offset": -60},
+    {"label": "Past-30", "offset": -30},
+    {"label": "Past-10", "offset": -10},
+    # 未来のバッチ。現在販売中
     {"label": "D-1",  "offset": 1},
     {"label": "D-3",  "offset": 3},
     {"label": "D-10", "offset": 10},
@@ -50,6 +56,7 @@ PRODUCT_MASTERS = [
         "sell_thru_ratio": 0.70,  # 高単価なので70%でも優良
         "procurement_days_before": 180,
         "alpha": 1.2, "beta": 6.0,   # 早期（仕入れ直後）に集中
+        "elasticity": -0.8,        # 高価格帯は価格変化に鈍感
     },
     {
         "type": "hotel",
@@ -59,6 +66,7 @@ PRODUCT_MASTERS = [
         "sell_thru_ratio": 0.88,
         "procurement_days_before": 150,
         "alpha": 2.0, "beta": 4.0,   # やや早期寄り
+        "elasticity": -1.2,        # やや鈍感
     },
     {
         "type": "hotel",
@@ -68,6 +76,7 @@ PRODUCT_MASTERS = [
         "sell_thru_ratio": 0.85,
         "procurement_days_before": 120,
         "alpha": 2.5, "beta": 2.5,   # 均等分布
+        "elasticity": -1.8,        # 標準的〜やや敏感
     },
     {
         "type": "hotel",
@@ -77,6 +86,7 @@ PRODUCT_MASTERS = [
         "sell_thru_ratio": 0.60,   # 格安でも売れ残りリスク大
         "procurement_days_before": 60,
         "alpha": 6.0, "beta": 1.2,   # 直前に集中
+        "elasticity": -2.5,        # 非常に敏感（安いから買う層）
     },
     # ── フライト 4商品 ─────────────────────────────────────────
     {
@@ -87,6 +97,7 @@ PRODUCT_MASTERS = [
         "sell_thru_ratio": 0.97,   # ほぼ完売
         "procurement_days_before": 180,
         "alpha": 1.0, "beta": 5.0,   # 早期集中（人気路線）
+        "elasticity": -0.5,        # 人気路線は価格に非弾力的（代えが利かない）
     },
     {
         "type": "flight",
@@ -96,6 +107,7 @@ PRODUCT_MASTERS = [
         "sell_thru_ratio": 0.85,
         "procurement_days_before": 150,
         "alpha": 2.0, "beta": 3.0,
+        "elasticity": -1.0,
     },
     {
         "type": "flight",
@@ -105,6 +117,7 @@ PRODUCT_MASTERS = [
         "sell_thru_ratio": 0.70,   # 売れ残りリスク中
         "procurement_days_before": 120,
         "alpha": 3.0, "beta": 2.5,
+        "elasticity": -1.5,
     },
     {
         "type": "flight",
@@ -114,6 +127,7 @@ PRODUCT_MASTERS = [
         "sell_thru_ratio": 0.45,   # 売れ残りリスク大
         "procurement_days_before": 90,
         "alpha": 5.0, "beta": 1.5,   # 直前集中
+        "elasticity": -2.0,        # ニッチ需要、安ければ動く
     },
 ]
 
@@ -158,7 +172,8 @@ def init_db():
             remaining_stock   INTEGER NOT NULL,
             base_price        INTEGER NOT NULL,
             departure_date    TEXT,
-            procurement_date  TEXT
+            procurement_date  TEXT,
+            elasticity        REAL NOT NULL DEFAULT -1.5
         )
     ''')
 
@@ -205,7 +220,7 @@ def init_db():
             # D-1 は出発直前 → より多くが売れていると想定
             days_until_dep = batch["offset"]
             procurement_window = pm["procurement_days_before"]
-            elapsed_ratio = max(0.0, 1.0 - (days_until_dep / procurement_window))
+            elapsed_ratio = max(0.0, min(1.0, 1.0 - (days_until_dep / procurement_window)))
             sold_so_far = int(pm["total_stock"] * pm["sell_thru_ratio"] * elapsed_ratio)
             remaining = max(0, pm["total_stock"] - sold_so_far)
 
@@ -217,12 +232,13 @@ def init_db():
                 pm["base_price"],
                 dep_str,
                 proc_str,
+                pm.get("elasticity", -1.5)
             ))
 
     cursor.executemany('''
         INSERT INTO inventory
-            (item_type, name, total_stock, remaining_stock, base_price, departure_date, procurement_date)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+            (item_type, name, total_stock, remaining_stock, base_price, departure_date, procurement_date, elasticity)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     ''', inv_records)
     conn.commit()
     print(f"✅ inventory テーブルに {len(inv_records)} 件の在庫レコードを生成しました。")
@@ -270,6 +286,8 @@ def populate_booking_events(conn, all_inv: list[dict]):
 
         # 仕入日より前、出発日より後にはならないようにクリップ
         booking_dt = max(proc_dt, min(dep_dt - timedelta(days=1), booking_dt))
+        # まだ来ていない未来の予約は生成しない
+        booking_dt = min(booking_dt, TODAY)
 
         # 時刻をランダムにずらす（HH:MM:SS）
         booking_dt = booking_dt.replace(
@@ -302,9 +320,12 @@ def populate_booking_events(conn, all_inv: list[dict]):
                 # 相性スコアに基づいて生成件数を決定
                 # 相性2.5 → 最大50件、相性0.3 → 最大5件程度
                 n_bookings = int(affinity * 20 * random.uniform(0.7, 1.3))
-                # D-1/D-3はすでに出発直前、D-30は仕入れからの長い期間がある
+                # 過去バッチは1.0、未来は期間に応じて減衰
                 window_bonus = {1: 0.3, 3: 0.5, 10: 0.8, 30: 1.0}
-                n_bookings = int(n_bookings * window_bonus.get(batch["offset"], 1.0))
+                if batch["offset"] <= 0:
+                    n_bookings = int(n_bookings * 1.0)
+                else:
+                    n_bookings = int(n_bookings * window_bonus.get(batch["offset"], 1.0))
 
                 for _ in range(n_bookings):
                     # フライトと相性の平均alpha/betaでランダム予約日を生成

@@ -87,9 +87,9 @@ def apply_custom_css():
         box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.2);
     }
     
-    .metric-label { font-size: 0.85rem; color: #94a3b8; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
+    .metric-label { font-size: 0.85rem; color: #e2e8f0; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
     .metric-value { font-size: 2rem; font-weight: 900; color: #ffffff; margin: 8px 0; font-family: 'Outfit', sans-serif; }
-    .metric-sub { font-size: 0.9rem; color: #64748b; font-weight: 400; }
+    .metric-sub { font-size: 0.9rem; color: #cbd5e1; font-weight: 400; }
     
     .badge-up { background: rgba(34, 197, 94, 0.1); color: #4ade80; padding: 4px 10px; border-radius: 999px; font-size: 0.75rem; font-weight: 700; border: 1px solid rgba(34, 197, 94, 0.2); }
     .badge-down { background: rgba(239, 68, 68, 0.1); color: #f87171; padding: 4px 10px; border-radius: 999px; font-size: 0.75rem; font-weight: 700; border: 1px solid rgba(239, 68, 68, 0.2); }
@@ -97,8 +97,80 @@ def apply_custom_css():
     
     /* タブ・サイドバーの装飾 */
     .stTabs [data-baseweb="tab-list"] { gap: 10px; background: rgba(15, 23, 42, 0.5); padding: 5px; border-radius: 12px; }
-    .stTabs [data-baseweb="tab"] { height: 45px; border-radius: 8px; color: #94a3b8; transition: all 0.2s; border: none; }
+    .stTabs [data-baseweb="tab"] { height: 45px; border-radius: 8px; color: #e2e8f0; transition: all 0.2s; border: none; }
     .stTabs [aria-selected="true"] { background: #334155; color: #ffffff; font-weight: 700; box-shadow: 0 2px 4px rgba(0,0,0,0.2); }
+    
+
+    /* ナビゲーション用のラジオボタン（疑似タブ）をモダンなボタン・タブ風に整形 */
+    /* st.radioの「点/円」を非表示にする */
+    div[data-testid="stRadio"] div[aria-label="MainNavigation"] label[data-baseweb="radio"] > div:first-child {
+        display: none !important;
+    }
+
+    div[data-testid="stRadio"] div[aria-label="MainNavigation"] div[role="radiogroup"] {
+        display: flex;
+        justify-content: center;
+        gap: 8px;
+        background: rgba(15, 23, 42, 0.4);
+        padding: 6px;
+        border-radius: 12px;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        width: 100%;
+    }
+    
+    div[data-testid="stRadio"] div[aria-label="MainNavigation"] label[data-baseweb="radio"] {
+        padding: 8px 20px !important;
+        border-radius: 10px !important;
+        transition: all 0.25s ease !important;
+        cursor: pointer !important;
+        border: 1px solid transparent !important;
+        margin: 0 !important;
+        background: transparent !important;
+        flex: 1;
+        text-align: center;
+        min-width: 140px;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+    }
+    
+    /* ホバー時 */
+    div[data-testid="stRadio"] div[aria-label="MainNavigation"] label[data-baseweb="radio"]:hover {
+        background: rgba(255, 255, 255, 0.08) !important;
+        border-color: rgba(255, 255, 255, 0.1) !important;
+    }
+
+    /* 選択中のスタイル */
+    div[data-testid="stRadio"] div[aria-label="MainNavigation"] label[data-baseweb="radio"]:has(input:checked) {
+        background: rgba(167, 139, 250, 0.25) !important;
+        border-color: rgba(167, 139, 250, 0.6) !important;
+        box-shadow: 0 4px 15px rgba(167, 139, 250, 0.2) !important;
+    }
+    
+    div[data-testid="stRadio"] div[aria-label="MainNavigation"] label[data-baseweb="radio"]:has(input:checked) p {
+        color: #ffffff !important;
+        font-weight: 800 !important;
+    }
+    
+    div[data-testid="stRadio"] div[aria-label="MainNavigation"] label[data-baseweb="radio"] p {
+        color: #cbd5e1 !important;
+        font-weight: 600 !important;
+        margin: 0 !important;
+        font-size: 0.95rem !important;
+        text-align: center;
+    }
+
+    /* 全般的な入力ウィジェットのラベル文字色を明るくする */
+    div[data-testid="stWidgetLabel"] p,
+    div[data-testid="stMarkdownContainer"] p {
+        color: #e2e8f0 !important;
+    }
+
+    /* ヘルプ用のTooltipアイコン(?マーク)の色を明るくする */
+    div[data-testid="stTooltipIcon"] svg {
+        stroke: #94a3b8 !important;
+        fill: #94a3b8 !important;
+    }
     
     /* 通知アラート */
     .alert-box {

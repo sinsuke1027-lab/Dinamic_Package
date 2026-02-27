@@ -25,15 +25,21 @@ def _get_decay_factor(lead_days: int, total_lead_days: int) -> float:
     except ImportError:
         return 1.0 # 予備
 
-def get_velocity_ratio(inventory_id: int, total_stock: int, remaining_stock: int, lead_days: int) -> Optional[float]:
+def get_velocity_ratio(inventory_id: int, total_stock: int, remaining_stock: int, lead_days: int, reference_date: Optional[date] = None) -> Optional[float]:
     """直近24時間の販売ペースを期待値と比較した比率を算出する"""
     conn = get_conn()
-    now = datetime.now(timezone.utc)
+    if reference_date:
+        # reference_dateの最後の時刻を基準にする関数
+        now = datetime.combine(reference_date, datetime.max.time()).replace(tzinfo=timezone.utc)
+    else:
+        now = datetime.now(timezone.utc)
+    
     one_day_ago = (now - timedelta(days=1)).isoformat()
+    now_str = now.isoformat()
     
     row = conn.execute(
-        "SELECT SUM(quantity) as qty FROM booking_events WHERE inventory_id = ? AND booked_at >= ?",
-        (inventory_id, one_day_ago)
+        "SELECT SUM(quantity) as qty FROM booking_events WHERE inventory_id = ? AND booked_at >= ? AND booked_at <= ?",
+        (inventory_id, one_day_ago, now_str)
     ).fetchone()
     conn.close()
     
@@ -69,57 +75,124 @@ def calc_velocity_adjustment(dynamic_price: int, velocity_ratio: Optional[float]
         return adj, f"鈍化({velocity_ratio:.1f}x) → 値下げ(-5%)"
     return 0, "安定"
 
-def calculate_roi_metrics(inventory_ids: Optional[list[int]] = None) -> dict:
-    """動的価格設定による収益改善効果(ROI)を算出する"""
+def calculate_roi_metrics(
+    inventory_ids: Optional[list[int]] = None,
+    target_start_date: Optional[str] = None,
+    target_end_date: Optional[str] = None,
+    reference_date: Optional[date] = None
+) -> dict:
+    """廃棄損と機会損失を考慮した純利益ベースの収益改善効果(ROI)を算出する"""
     conn = get_conn()
     
-    where_clause = ""
+    conditions = []
     params = []
+    
     if inventory_ids:
         placeholders = ",".join(["?"] * len(inventory_ids))
-        where_clause = f"WHERE inventory_id IN ({placeholders})"
-        params = inventory_ids
-
-    # 簡易的な集計: 累計の sold_price vs base_price_at_sale
-    row = conn.execute(f"""
+        conditions.append(f"be.inventory_id IN ({placeholders})")
+        params.extend(inventory_ids)
+        
+    if target_start_date:
+        conditions.append("date(be.booked_at) >= ?")
+        params.append(target_start_date)
+        
+    if target_end_date:
+        conditions.append("date(be.booked_at) <= ?")
+        params.append(target_end_date)
+        
+    if reference_date:
+        # 未来の情報は見ない
+        ref_end_str = datetime.combine(reference_date, datetime.max.time()).replace(tzinfo=timezone.utc).isoformat()
+        conditions.append("be.booked_at <= ?")
+        params.append(ref_end_str)
+        
+    where_clause = ""
+    if conditions:
+        where_clause = "WHERE " + " AND ".join(conditions)
+    
+    # イールドマネジメントに基づくROI計算（廃棄損回避と値上げ増益）
+    query = f"""
         SELECT 
-            SUM(sold_price) as total_dynamic,
-            SUM(base_price_at_sale) as total_fixed,
-            SUM(quantity) as total_units
-        FROM booking_events
+            SUM(be.sold_price - (i.base_price * {DEFAULT_COST_RATIO})) as total_dynamic_profit,
+            SUM(CASE 
+                WHEN be.sold_price < be.base_price_at_sale THEN -(i.base_price * {DEFAULT_COST_RATIO}) 
+                ELSE be.base_price_at_sale - (i.base_price * {DEFAULT_COST_RATIO}) 
+            END) as total_fixed_profit,
+            SUM(CASE 
+                WHEN be.sold_price < be.base_price_at_sale THEN (i.base_price * {DEFAULT_COST_RATIO}) 
+                ELSE 0 
+            END) as avoided_waste_loss,
+            SUM(CASE 
+                WHEN be.sold_price >= be.base_price_at_sale THEN be.sold_price - be.base_price_at_sale 
+                ELSE 0 
+            END) as surge_profit,
+            SUM(be.quantity) as total_units
+        FROM booking_events be
+        JOIN inventory i ON be.inventory_id = i.id
         {where_clause}
-    """, params).fetchone()
+    """
+    row = conn.execute(query, params).fetchone()
     
-    total_dynamic = row["total_dynamic"] or 0
-    total_fixed   = row["total_fixed"] or 0
-    lift = total_dynamic - total_fixed
-    lift_pct = (lift / total_fixed * 100) if total_fixed > 0 else 0
+    dyn_profit = int(row["total_dynamic_profit"] or 0)
+    fix_profit = int(row["total_fixed_profit"] or 0)
+    avoided_loss = int(row["avoided_waste_loss"] or 0)
+    surge_profit = int(row["surge_profit"] or 0)
+    total_units = row["total_units"] or 0
+
+    lift = dyn_profit - fix_profit
+    lift_pct = (lift / abs(fix_profit) * 100) if fix_profit != 0 else 0
     
-    daily_rows = conn.execute(f"""
-        SELECT date(booked_at) as day, SUM(sold_price) as day_dynamic, SUM(base_price_at_sale) as day_fixed
-        FROM booking_events
+    # 日別データも純利益ベースで集計
+    daily_query = f"""
+        SELECT 
+            date(be.booked_at) as day, 
+            SUM(be.sold_price - (i.base_price * {DEFAULT_COST_RATIO})) as day_dynamic_profit, 
+            SUM(CASE 
+                WHEN be.sold_price < be.base_price_at_sale THEN -(i.base_price * {DEFAULT_COST_RATIO}) 
+                ELSE be.base_price_at_sale - (i.base_price * {DEFAULT_COST_RATIO}) 
+            END) as day_fixed_profit,
+            SUM(be.sold_price) as day_dyn_sales,
+            0 as day_dyn_waste,
+            SUM(be.base_price_at_sale) as day_fix_sales,
+            SUM(CASE 
+                WHEN be.sold_price < be.base_price_at_sale THEN (i.base_price * {DEFAULT_COST_RATIO}) 
+                ELSE 0 
+            END) as day_fix_waste
+        FROM booking_events be
+        JOIN inventory i ON be.inventory_id = i.id
         {where_clause}
         GROUP BY day ORDER BY day
-    """, params).fetchall()
+    """
+    daily_rows = conn.execute(daily_query, params).fetchall()
     
     conn.close()
     
     return {
-        "total_dynamic": total_dynamic,
-        "total_fixed":   total_fixed,
+        "total_dynamic": dyn_profit, # 便宜上キー名は維持（中身は純利益）
+        "total_fixed":   fix_profit,
+        "avoided_waste_loss": avoided_loss,
+        "surge_profit":  surge_profit,
         "lift":          lift,
         "lift_pct":      round(lift_pct, 1),
-        "total_units":   row["total_units"] or 0,
+        "total_units":   total_units,
         "daily_data":    [dict(r) for r in daily_rows]
     }
 
-def calculate_demand_forecast(inventory_id: int, lead_days: int, remaining_stock: int, total_stock: int, base_price: int, cost: int) -> dict:
+def calculate_demand_forecast(inventory_id: int, lead_days: int, remaining_stock: int, total_stock: int, base_price: int, cost: int, reference_date: Optional[date] = None) -> dict:
     """特定商品の需要予測を行い、3つのシナリオを返す。"""
     conn = get_conn()
-    cutoff = (datetime.now(timezone.utc) - timedelta(days=14)).isoformat()
+    
+    if reference_date:
+        now = datetime.combine(reference_date, datetime.max.time()).replace(tzinfo=timezone.utc)
+    else:
+        now = datetime.now(timezone.utc)
+        
+    cutoff = (now - timedelta(days=14)).isoformat()
+    now_str = now.isoformat()
+    
     row = conn.execute(
-        "SELECT SUM(quantity) as qty FROM booking_events WHERE inventory_id = ? AND booked_at >= ?",
-        (inventory_id, cutoff)
+        "SELECT SUM(quantity) as qty FROM booking_events WHERE inventory_id = ? AND booked_at >= ? AND booked_at <= ?",
+        (inventory_id, cutoff, now_str)
     ).fetchone()
     conn.close()
 
@@ -153,16 +226,26 @@ def calculate_demand_forecast(inventory_id: int, lead_days: int, remaining_stock
         }
     return forecast_results
 
-def calculate_inventory_rescue_metrics(inventory_ids: Optional[list[int]] = None) -> dict:
+def calculate_inventory_rescue_metrics(inventory_ids: Optional[list[int]] = None, reference_date: Optional[date] = None) -> dict:
     """切迫在庫の救済率を算出する"""
     conn = get_conn()
     
     where_clause = ""
     params = []
+    conditions = []
+    
     if inventory_ids:
         placeholders = ",".join(["?"] * len(inventory_ids))
-        where_clause = f"WHERE inventory_id IN ({placeholders})"
-        params = inventory_ids
+        conditions.append(f"inventory_id IN ({placeholders})")
+        params.extend(inventory_ids)
+        
+    if reference_date:
+        ref_end_str = datetime.combine(reference_date, datetime.max.time()).replace(tzinfo=timezone.utc).isoformat()
+        conditions.append(f"booked_at <= ?")
+        params.append(ref_end_str)
+        
+    if conditions:
+        where_clause = "WHERE " + " AND ".join(conditions)
 
     rescue_row = conn.execute(f"""
         SELECT 
@@ -184,7 +267,7 @@ def calculate_inventory_rescue_metrics(inventory_ids: Optional[list[int]] = None
         FROM booking_events be
         JOIN inventory i ON be.inventory_id = i.id
         WHERE i.item_type = 'hotel'
-        {where_clause.replace("WHERE ", "AND ")}
+        {where_clause.replace("WHERE ", "AND ") if where_clause else ""}
     """, params).fetchone()
     
     conn.close()
@@ -205,7 +288,8 @@ def simulate_sales_scenario(
     f_item: dict, 
     discount: int, 
     lead_days: int, 
-    market_condition: str = "base"
+    market_condition: str = "base",
+    reference_date: Optional[date] = None
 ) -> dict:
     """
     30日間（またはリードタイム分）の販売シミュレーションを行い、
@@ -216,10 +300,10 @@ def simulate_sales_scenario(
     h_unit_profit_standalone = h_item["current_price"] - h_item["cost"]
     f_unit_profit_standalone = f_item["current_price"] - f_item["cost"]
     
-    # 需要予測
     h_forecasts = calculate_demand_forecast(
         h_item["id"], lead_days, h_item["remaining_stock"], 
-        h_item["total_stock"], h_item["base_price"], h_item["cost"]
+        h_item["total_stock"], h_item["base_price"], h_item["cost"],
+        reference_date=reference_date
     )
     vel_a_base = h_forecasts.get(market_condition, h_forecasts["base"])["daily_pace"]
     
@@ -229,30 +313,68 @@ def simulate_sales_scenario(
     vel_b_boosted = vel_b_base * lift_factor
     
     # 動的カニバリゼーション（シミュレーターと同期）
-    dynamic_cannibal_rate = min(1.0, max(0.0, f_item.get("velocity_ratio", 1.0) - 1.0))
+    vel_ratio = f_item.get("velocity_ratio")
+    if vel_ratio is None:
+        vel_ratio = 1.0
+    dynamic_cannibal_rate = min(1.0, max(0.0, vel_ratio - 1.0))
     
     # 2. タイムライン計算
     curr_a_h_stock = h_item["remaining_stock"]
     curr_b_h_stock = h_item["remaining_stock"]
+    curr_n_h_stock = h_item["remaining_stock"]
     flight_stock_a = f_item["remaining_stock"]
     flight_stock_b = f_item["remaining_stock"]
+    flight_stock_n = f_item["remaining_stock"]
     
     total_profit_a = 0
     total_profit_b = 0
     total_sold_pkg = 0
+    
+    revenue_a_h = 0
+    cost_a_h = 0
+    revenue_a_f = 0
+    cost_a_f = 0
+    
+    revenue_b_pkg = 0
+    revenue_b_h_solo = 0
+    cost_b_h = 0
+    revenue_b_f_solo = 0
+    cost_b_f = 0
+    discount_b_total = 0
+    cannibal_loss_b = 0
+    
+    revenue_n_h = 0
+    revenue_n_f = 0
+    
     history = []
 
     days_t = list(range(max(1, lead_days), -1, -1))
     
     for t in days_t:
+        # --- シナリオ N (ナイーブ・単体・現状維持) ---
+        h_naive_price = h_item.get("original_price", h_item["current_price"])
+        f_naive_price = f_item.get("original_price", f_item["current_price"])
+        
+        sold_h_n = min(curr_n_h_stock, vel_a_base)
+        curr_n_h_stock -= sold_h_n
+        revenue_n_h += sold_h_n * h_naive_price
+
+        sold_f_n = min(flight_stock_n, vel_b_base)
+        flight_stock_n -= sold_f_n
+        revenue_n_f += sold_f_n * f_naive_price
+
         # --- シナリオ A (単品) ---
         sold_h_a = min(curr_a_h_stock, vel_a_base)
         curr_a_h_stock -= sold_h_a
         total_profit_a += sold_h_a * h_unit_profit_standalone
+        revenue_a_h += sold_h_a * h_item["current_price"]
+        cost_a_h += sold_h_a * h_item["cost"]
 
         sold_f_a = min(flight_stock_a, vel_b_base)
         flight_stock_a -= sold_f_a
         total_profit_a += sold_f_a * f_unit_profit_standalone
+        revenue_a_f += sold_f_a * f_item["current_price"]
+        cost_a_f += sold_f_a * f_item["cost"]
 
         # --- シナリオ B (パッケージ + 切替) ---
         # パッケージ販売
@@ -265,31 +387,70 @@ def simulate_sales_scenario(
         # パッケージ利益
         pkg_unit_profit = (h_unit_profit_standalone + f_unit_profit_standalone) - discount
         total_profit_b += sold_pkg * pkg_unit_profit - (sold_pkg * f_unit_profit_standalone * dynamic_cannibal_rate)
+        
+        # パッケージ売上等
+        revenue_b_pkg += sold_pkg * (h_item["current_price"] + f_item["current_price"] - discount)
+        cost_b_h += sold_pkg * h_item["cost"]
+        cost_b_f += sold_pkg * f_item["cost"]
+        discount_b_total += sold_pkg * discount
+        cannibal_loss_b += sold_pkg * f_unit_profit_standalone * dynamic_cannibal_rate
 
         # 在庫が偏った場合の単品切替
         if curr_b_h_stock > 0 and flight_stock_b == 0:
             sold_h_solo = min(curr_b_h_stock, vel_a_base)
             curr_b_h_stock -= sold_h_solo
             total_profit_b += sold_h_solo * h_unit_profit_standalone
+            revenue_b_h_solo += sold_h_solo * h_item["current_price"]
+            cost_b_h += sold_h_solo * h_item["cost"]
+            
         elif flight_stock_b > 0 and curr_b_h_stock == 0:
             sold_f_solo = min(flight_stock_b, vel_b_base)
             flight_stock_b -= sold_f_solo
             total_profit_b += sold_f_solo * f_unit_profit_standalone
+            revenue_b_f_solo += sold_f_solo * f_item["current_price"]
+            cost_b_f += sold_f_solo * f_item["cost"]
+
+        # 日次の含み廃棄損 (まだ売れ残っている在庫の原価総額)
+        potential_waste_a = (curr_a_h_stock * h_item["cost"]) + (flight_stock_a * f_item["cost"])
+        potential_waste_b = (curr_b_h_stock * h_item["cost"]) + (flight_stock_b * f_item["cost"])
 
         # 履歴記録 (グラフ用)
+        # ※ シナリオBの売上内訳について、パッケージ売上は目安として 1:1 (半額ずつ) 按分として記録します。
+        revenue_b_pkg_h_estimated = revenue_b_pkg // 2
+        revenue_b_pkg_f_estimated = revenue_b_pkg - revenue_b_pkg_h_estimated
+
         history.append({
             "day_idx": t,
             "day_label": f"D-{t}",
             "profit_a": int(total_profit_a),
             "profit_b": int(total_profit_b),
+            "h_stock_a": int(curr_a_h_stock),
+            "f_stock_a": int(flight_stock_a),
             "h_stock_b": int(curr_b_h_stock),
             "f_stock_b": int(flight_stock_b),
+            "revenue_n_h": int(revenue_n_h),
+            "revenue_n_f": int(revenue_n_f),
+            "revenue_n": int(revenue_n_h + revenue_n_f),
+            "revenue_a": int(revenue_a_h + revenue_a_f),
+            "revenue_b": int(revenue_b_pkg + revenue_b_h_solo + revenue_b_f_solo),
+            "revenue_a_h": int(revenue_a_h),
+            "revenue_a_f": int(revenue_a_f),
+            "revenue_b_h": int(revenue_b_pkg_h_estimated + revenue_b_h_solo),
+            "revenue_b_f": int(revenue_b_pkg_f_estimated + revenue_b_f_solo),
+            "potential_waste_a": int(potential_waste_a),
+            "potential_waste_b": int(potential_waste_b),
             "decay_factor": _get_decay_factor(t, lead_days)
         })
 
     # 30日目の廃棄損 (Day 0)
-    waste_a = (curr_a_h_stock * h_item["cost"] + flight_stock_a * f_item["cost"])
-    waste_b = (curr_b_h_stock * h_item["cost"] + flight_stock_b * f_item["cost"])
+    waste_a_h = curr_a_h_stock * h_item["cost"]
+    waste_a_f = flight_stock_a * f_item["cost"]
+    waste_a = waste_a_h + waste_a_f
+    
+    waste_b_h = curr_b_h_stock * h_item["cost"]
+    waste_b_f = flight_stock_b * f_item["cost"]
+    waste_b = waste_b_h + waste_b_f
+    
     total_profit_a -= waste_a
     total_profit_b -= waste_b
     
@@ -304,19 +465,48 @@ def simulate_sales_scenario(
         "gain": int(total_profit_b - total_profit_a),
         "max_sets": int(h_item["remaining_stock"]), # 目安
         "packages_sold": int(total_sold_pkg),
-        "history": history
+        "history": history,
+        "details_a": {
+            "revenue": int(revenue_a_h + revenue_a_f),
+            "cost": int(cost_a_h + cost_a_f),
+            "waste": int(waste_a),
+            "revenue_h": int(revenue_a_h),
+            "revenue_f": int(revenue_a_f),
+            "waste_h": int(waste_a_h),
+            "waste_f": int(waste_a_f)
+        },
+        "details_b": {
+            "revenue": int(revenue_b_pkg + revenue_b_h_solo + revenue_b_f_solo),
+            "cost": int(cost_b_h + cost_b_f),
+            "waste": int(waste_b),
+            "discount_loss": int(discount_b_total),
+            "cannibal_loss": int(cannibal_loss_b),
+            "revenue_pkg": int(revenue_b_pkg),
+            "revenue_h_solo": int(revenue_b_h_solo),
+            "revenue_f_solo": int(revenue_b_f_solo),
+            "waste_h": int(waste_b_h),
+            "waste_f": int(waste_b_f)
+        },
+        "params": {
+            "vel_a_base": vel_a_base,
+            "vel_b_base": vel_b_base,
+            "vel_b_boosted": vel_b_boosted,
+            "dynamic_cannibal_rate": dynamic_cannibal_rate
+        }
     }
 
 
 
-def calculate_optimal_strategy(scenario: str = "base", inventory_ids: Optional[list[int]] = None, current_prices: Optional[Dict[int, int]] = None) -> dict:
+def calculate_optimal_strategy(scenario: str = "base", inventory_ids: Optional[list[int]] = None, current_prices: Optional[dict[int, int]] = None, reference_date: Optional[date] = None) -> dict:
     """
     全商品に対して「単品維持」vs「パッケージ化」の最適販売戦略を計算する。
     Prescriptive Analytics の中核ロジック。
-
+    
     Args:
         scenario: "base" / "pessimistic" / "optimistic"
         inventory_ids: フィルタリング対象のIDリスト
+        current_prices: 現在の時価マップ
+        reference_date: シミュレーション基準日
 
     Returns:
         {
@@ -353,7 +543,7 @@ def calculate_optimal_strategy(scenario: str = "base", inventory_ids: Optional[l
             "ai_impact": 0,
         }
 
-    now = datetime.now(timezone.utc).date()
+    now = reference_date if reference_date else datetime.now(timezone.utc).date()
 
     # ---------- Step 1: 全商品の単品着地点を算出 ----------
     items = []
@@ -369,7 +559,7 @@ def calculate_optimal_strategy(scenario: str = "base", inventory_ids: Optional[l
         cost = int(row["base_price"] * DEFAULT_COST_RATIO)
 
         # フライトの販売速度比率を取得（カニバリゼーション率の動的算出に使用）
-        vr = get_velocity_ratio(row["id"], row["total_stock"], row["remaining_stock"], max(lead_days, 1))
+        vr = get_velocity_ratio(row["id"], row["total_stock"], row["remaining_stock"], max(lead_days, 1), reference_date=reference_date)
 
         forecast = calculate_demand_forecast(
             inventory_id    = row["id"],
@@ -378,6 +568,7 @@ def calculate_optimal_strategy(scenario: str = "base", inventory_ids: Optional[l
             total_stock     = row["total_stock"],
             base_price      = row["base_price"],
             cost            = cost,
+            reference_date  = reference_date
         )
         sc = forecast.get(scenario, forecast["base"])
 
@@ -416,7 +607,7 @@ def calculate_optimal_strategy(scenario: str = "base", inventory_ids: Optional[l
                 continue
 
             # シミュレーション実行 (不整合解消の核)
-            sim = simulate_sales_scenario(h, f, proposed_discount, h["lead_days"], scenario)
+            sim = simulate_sales_scenario(h, f, proposed_discount, h["lead_days"], scenario, reference_date=reference_date)
             gain = sim["gain"]
 
             if gain > best_gain:

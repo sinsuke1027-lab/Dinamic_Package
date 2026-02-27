@@ -111,6 +111,58 @@ def calc_time_adjustment(base_price: int, lead_days: int) -> tuple[int, str]:
 
 
 # ─────────────────────────────────────────
+# 需要予測・弾力性要因の計算 (アプローチ2)
+# ─────────────────────────────────────────
+
+def calc_demand_based_pricing(
+    inventory_id: int,
+    base_price: int,
+    total_stock: int,
+    remaining_stock: int,
+    lead_days: int,
+    elasticity: float = -1.5,
+    reference_date: Optional[date] = None,
+) -> tuple[int, str, float, float]:
+    """
+    需要予測と価格弾力性に基づいて最適価格調整額を逆算する。
+    """
+    if lead_days <= 0 or remaining_stock <= 0:
+        return 0, "計算対象外（在庫なし or 出発済み）", 0.0, 0.0
+
+    # 1. 目標販売ペース (Target Velocity) 1日あたり
+    target_velocity = remaining_stock / lead_days
+
+    # 2. 現在の販売ペース (Current Velocity) 直近の販売実績から
+    try:
+        from packaging_engine import calculate_demand_forecast
+        cost = int(base_price * 0.7)
+        forecasts = calculate_demand_forecast(
+            inventory_id, lead_days, remaining_stock, total_stock, base_price, cost, reference_date=reference_date
+        )
+        current_velocity = forecasts["base"]["daily_pace"]
+    except Exception:
+        current_velocity = (total_stock - remaining_stock) / max(1, (180 - lead_days))
+
+    current_velocity = max(0.01, current_velocity)
+
+    # 3. 最適価格逆算
+    ratio = target_velocity / current_velocity
+    ratio = min(5.0, max(0.2, ratio))
+    price_multiplier = math.pow(ratio, 1.0 / elasticity)
+    
+    adj = int(base_price * price_multiplier) - base_price
+
+    if price_multiplier > 1.05:
+        reason = f"目標ペース({target_velocity:.1f}件/日)に比べ現在好調({current_velocity:.1f}件/日)なため、弾力性考慮で値上げ(+¥{adj:,})"
+    elif price_multiplier < 0.95:
+        reason = f"目標ペース({target_velocity:.1f}件/日)に比べ現在鈍化({current_velocity:.1f}件/日)しているため、弾力性考慮で値下げ(-¥{abs(adj):,})"
+    else:
+        reason = f"目標ペース({target_velocity:.1f}件/日)通りに推移中のため価格維持"
+
+    return adj, reason, target_velocity, current_velocity
+
+
+# ─────────────────────────────────────────
 # 在庫資産価値の減衰（崖っぷち型カーブ）
 # ─────────────────────────────────────────
 
@@ -170,8 +222,10 @@ def calculate_pricing_result(
     total_stock: int,
     remaining_stock: int,
     departure_date: Optional[str],
+    elasticity: float = -1.5,
     reference_date: Optional[date] = None,
     config: Optional[dict] = None,
+    strategy: str = "rule_based"
 ) -> dict:
     """
     2軸加算モデルによる価格計算を行い、計算根拠付きの PricingResult を返す。
@@ -183,6 +237,7 @@ def calculate_pricing_result(
         total_stock:    総在庫数
         remaining_stock: 残在庫数
         departure_date: 出発日（YYYY-MM-DD文字列、または None）
+        elasticity:     価格弾力性パラメータ
         reference_date: 比較基準日（テスト用; None なら今日）
 
     Returns:
@@ -190,21 +245,13 @@ def calculate_pricing_result(
     """
     today = reference_date or date.today()
 
-    # ── 在庫要因 ──────────────────────────────────────────────────
     inv_ratio = remaining_stock / total_stock if total_stock > 0 else 0.0
-    inv_adj, inv_reason = calc_inventory_adjustment(base_price, inv_ratio)
 
-    # ── リードタイム要因 ─────────────────────────────────────────
     if departure_date:
         dep_d = date.fromisoformat(departure_date)
         lead_days = (dep_d - today).days
     else:
         lead_days = None
-
-    if lead_days is not None:
-        time_adj, time_reason = calc_time_adjustment(base_price, lead_days)
-    else:
-        time_adj, time_reason = 0, "出発日未設定のため時期調整なし"
 
     # ── 設定パラメータの取得 ───────────────────────────────────────
     conf = config or {}
@@ -213,26 +260,81 @@ def calculate_pricing_result(
     brake_threshold = conf.get("brake_threshold", BRAKE_THRESHOLD)
     brake_strength  = conf.get("brake_strength_pct", BRAKE_STRENGTH_PCT * 100) / 100.0
 
-    # ── Velocity 自動ブレーキ ──────────────────────────────────────
+    inv_adj = 0
+    time_adj = 0
     vel_adj = 0
-    is_brake_active = False
+    demand_adj = 0
+    decay_adj = 0
     vr = None
-    try:
-        from packaging_engine import get_velocity_ratio
-        vr = get_velocity_ratio(inventory_id, total_stock, remaining_stock, lead_days)
-        if vr and vr >= brake_threshold:
-            vel_adj = round(base_price * brake_strength)
-            vel_reason = f"販売ペース異常({vr:.1f}x)を検知。自動価格ブレーキを発動(+¥{vel_adj:,})"
-            is_brake_active = True
-        elif vr:
-            vel_reason = f"販売ペースは正常({vr:.1f}x)です"
+    is_brake_active = False
+
+    if strategy == "rule_based":
+        inv_adj, inv_reason = calc_inventory_adjustment(base_price, inv_ratio)
+        if lead_days is not None:
+            time_adj, time_reason = calc_time_adjustment(base_price, lead_days)
         else:
-            vel_reason = "販売速度データ不足"
-    except Exception:
-        vel_reason = "速度解析エラー"
+            time_adj, time_reason = 0, "出発日未設定のため時期調整なし"
+
+        try:
+            from packaging_engine import get_velocity_ratio
+            vr = get_velocity_ratio(inventory_id, total_stock, remaining_stock, lead_days, reference_date=reference_date)
+            if vr and vr >= brake_threshold:
+                vel_adj = round(base_price * brake_strength)
+                vel_reason = f"販売ペース異常({vr:.1f}x)を検知。自動ブレーキ発動(+¥{vel_adj:,})"
+                is_brake_active = True
+            elif vr:
+                vel_reason = f"販売ペースは正常({vr:.1f}x)です"
+            else:
+                vel_reason = "販売速度データ不足"
+        except Exception:
+            vel_reason = "速度解析エラー"
+
+        theoretical = base_price + inv_adj + time_adj + vel_adj
+        reason = f"{inv_reason}。{time_reason}。{vel_reason}。"
+        waterfall = [
+            {"label": "基本価格", "value": base_price,  "measure": "absolute"},
+            {"label": "在庫調整", "value": inv_adj,      "measure": "relative"},
+            {"label": "時期調整", "value": time_adj,     "measure": "relative"},
+            {"label": "速度調整", "value": vel_adj,      "measure": "relative"}
+        ]
+
+    elif strategy == "demand_based":
+        try:
+            from packaging_engine import get_velocity_ratio
+            if lead_days:
+                vr = get_velocity_ratio(inventory_id, total_stock, remaining_stock, lead_days, reference_date=reference_date)
+        except Exception:
+            pass
+
+        if lead_days is not None:
+            demand_adj, d_reason, _, _ = calc_demand_based_pricing(
+                inventory_id, base_price, total_stock, remaining_stock, lead_days, elasticity=elasticity, reference_date=reference_date
+            )
+            # 崖っぷち減衰(Time Decay)
+            # 全体のリードタイムを180日として計算
+            decay = calculate_inventory_decay_factor(lead_days, 180, k=20.0, p=0.08)
+            target_price = base_price + demand_adj
+            decay_adj = int(target_price * decay - target_price)
+            
+            if decay < 0.95:
+                reason = f"{d_reason}。さらに出発直前のため見切り割引(-¥{abs(decay_adj):,})が適用されています。"
+            else:
+                reason = d_reason
+        else:
+            reason = "出発日未設定のため需要予測・減衰の対象外"
+
+        theoretical = base_price + demand_adj + decay_adj
+        waterfall = [
+            {"label": "基本価格", "value": base_price,  "measure": "absolute"},
+            {"label": "需要予測", "value": demand_adj,  "measure": "relative"},
+            {"label": "期限減衰", "value": decay_adj,   "measure": "relative"}
+        ]
+    else:
+        theoretical = base_price
+        reason = "不明な戦略"
+        waterfall = []
 
     # ── 最終価格（上下限: config に基づくクランプ）────────────
-    theoretical = base_price + inv_adj + time_adj + vel_adj
     final_price  = round(theoretical / 100) * 100          # 100円単位
 
     min_p = round(base_price * (1.0 - max_discount) / 100) * 100
@@ -241,17 +343,7 @@ def calculate_pricing_result(
     final_price = max(final_price, min_p)
     final_price = min(final_price, max_p)
 
-    # ── 理由文の合成 ─────────────────────────────────────────────
-    reason = f"{inv_reason}。{time_reason}。{vel_reason}。"
-
-    # ウォーターフォールチャート用の構造化データ
-    waterfall = [
-        {"label": "基本価格", "value": base_price,  "measure": "absolute"},
-        {"label": "在庫調整", "value": inv_adj,      "measure": "relative"},
-        {"label": "時期調整", "value": time_adj,     "measure": "relative"},
-        {"label": "速度調整", "value": vel_adj,      "measure": "relative"},
-        {"label": "最終価格", "value": final_price,  "measure": "total"},
-    ]
+    waterfall.append({"label": "最終価格", "value": final_price, "measure": "total"})
 
     return {
         "inventory_id":          inventory_id,
@@ -265,6 +357,7 @@ def calculate_pricing_result(
         "inv_ratio":             round(inv_ratio, 3),
         "lead_days":             lead_days,
         "departure_date":        departure_date,
+        "elasticity":            elasticity,
         "reason":                reason,
         "waterfall":             waterfall,
         "is_brake_active":       is_brake_active,
@@ -292,6 +385,7 @@ def calculate_all() -> list[dict]:
             total_stock     = row_dict['total_stock'],
             remaining_stock = row_dict['remaining_stock'],
             departure_date  = row_dict.get('departure_date'),
+            elasticity      = row_dict.get('elasticity', -1.5),
         )
         results.append(result)
     return results
