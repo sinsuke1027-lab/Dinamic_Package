@@ -191,6 +191,91 @@ def apply_custom_css():
     .alert-danger { background: #fee2e2; border: 1px solid #fecaca; color: #991b1b; }
     .alert-info { background: #e0e7ff; border: 1px solid #c7d2fe; color: #3730a3; }
     .alert-icon { font-size: 1.2rem; }
+
+    /* ─── サイドバー ─────────────────────────────────── */
+    [data-testid="stSidebar"] {
+        background: #ffffff !important;
+        border-right: 1px solid #e2e8f0 !important;
+    }
+    [data-testid="stSidebar"] * {
+        color: #1e293b !important;
+    }
+    [data-testid="stSidebar"] .stMarkdown p,
+    [data-testid="stSidebar"] label,
+    [data-testid="stSidebar"] span {
+        color: #1e293b !important;
+    }
+    [data-testid="stSidebar"] hr {
+        border-color: #e2e8f0 !important;
+    }
+
+    /* ─── 入力ウィジェット全般（ライト化） ────────────── */
+    /* テキスト入力・セレクトボックス・スライダーのラベル */
+    .stTextInput label, .stSelectbox label, .stMultiSelect label,
+    .stDateInput label, .stSlider label, .stRadio label,
+    div[data-testid="stWidgetLabel"] > p {
+        color: #334155 !important;
+        font-weight: 600 !important;
+    }
+    /* インプットボックスの背景・枠色 */
+    .stTextInput input, .stSelectbox select,
+    div[data-baseweb="select"] > div,
+    div[data-baseweb="input"] > div,
+    div[data-baseweb="textarea"] > div {
+        background-color: #ffffff !important;
+        border-color: #cbd5e1 !important;
+        color: #1e293b !important;
+    }
+    /* マルチセレクトのタグ */
+    [data-baseweb="tag"] {
+        background-color: #e0e7ff !important;
+        color: #3730a3 !important;
+    }
+    /* ドロップダウンメニュー */
+    ul[role="listbox"] {
+        background: #ffffff !important;
+        border: 1px solid #e2e8f0 !important;
+    }
+    ul[role="listbox"] li:hover {
+        background: #f1f5f9 !important;
+    }
+    /* スライダー */
+    div[data-testid="stSlider"] .st-ae {
+        background: #6366f1 !important;
+    }
+
+    /* ─── Streamlit デフォルトUI（dataframe, buttonなど）のライト化 ── */
+    /* ボタン */
+    .stButton > button {
+        background: #6366f1 !important;
+        color: #ffffff !important;
+        border: none !important;
+        border-radius: 8px !important;
+        font-weight: 600 !important;
+    }
+    .stButton > button:hover {
+        background: #4f46e5 !important;
+    }
+    /* expander */
+    details summary {
+        color: #1e293b !important;
+        font-weight: 600 !important;
+    }
+    details[open] summary {
+        color: #4f46e5 !important;
+    }
+    /* dataframe */
+    .stDataFrame, .stDataFrame * {
+        color: #1e293b !important;
+    }
+    /* info/warning/success メッセージボックス */
+    div[data-testid="stAlert"] {
+        border-radius: 10px !important;
+    }
+    /* caption */
+    div[data-testid="stCaptionContainer"] p {
+        color: #64748b !important;
+    }
     </style>
     """, unsafe_allow_html=True)
 

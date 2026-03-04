@@ -413,7 +413,7 @@ if selected_tab == "📈 Executive Summary":
                 mode='lines+markers', line=dict(color='#f43f5e', width=3)
             ))
             
-            dark_layout(fig_roi, "累積売上と廃棄損の推移", yaxis_title="累積金額 (円)")
+            light_layout(fig_roi, "累積売上と廃棄損の推移", yaxis_title="累積金額 (円)")
             st.plotly_chart(fig_roi, use_container_width=True, key="summary_roi_chart")
         else:
             st.info("📊 ROI分析用の販売データがまだ蓄積されていません。")
@@ -426,7 +426,7 @@ if selected_tab == "📈 Executive Summary":
             labels=["救済済", "未売/通常"], values=[rescued, abandoned],
             hole=.6, marker_colors=["#10b981", "#1e293b"]
         )])
-        dark_layout(fig_donut, "救済状況内訳")
+        light_layout(fig_donut, "救済状況内訳")
         st.plotly_chart(fig_donut, use_container_width=True, key="summary_donut_chart")
 
     st.markdown("---")
@@ -682,7 +682,7 @@ if selected_tab == "🔍 Analysis & Tracking":
                 totals=dict(marker=dict(color="#a78bfa")),
             ))
         
-        dark_layout(fig_wf)
+        light_layout(fig_wf)
         st.plotly_chart(fig_wf, use_container_width=True, key="tracking_wf_chart_unique")
 
     with col_curve:
@@ -699,7 +699,7 @@ if selected_tab == "🔍 Analysis & Tracking":
                 mode="lines+markers", line=dict(color="#a78bfa", width=3),
                 fill="tozeroy", fillcolor="rgba(167,139,250,0.1)"
             ))
-            dark_layout(fig_curve)
+            light_layout(fig_curve)
             st.plotly_chart(fig_curve, use_container_width=True, key="tracking_curve_chart_unique")
         else:
             st.info("販売データがありません")
@@ -746,7 +746,7 @@ if selected_tab == "📦 Strategy Map":
                 textposition="top center",
                 marker=dict(size=b_df["score"], color=b_df["lift"], colorscale='Viridis', showscale=True)
             )])
-            dark_layout(fig_bubble, "在庫切迫度 vs 利益改善リフト", yaxis_title="期待利益改善額 (円)")
+            light_layout(fig_bubble, "在庫切迫度 vs 利益改善リフト", yaxis_title="期待利益改善額 (円)")
             fig_bubble.update_layout(xaxis_title="在庫切迫度スコア (1.0=緊急)")
             st.plotly_chart(fig_bubble, use_container_width=True, key="strategy_bubble_map_unique")
         else:
@@ -783,7 +783,7 @@ if selected_tab == "📦 Strategy Map":
                     line=dict(color='rgba(0,0,0,0)', width=1)
                 )
             ))
-            dark_layout(fig_bar)
+            light_layout(fig_bar)
             fig_bar.update_layout(
                 height=max(300, len(pairs) * 60 + 100),
                 margin=dict(t=20, l=150, r=50, b=20),
@@ -803,7 +803,7 @@ if selected_tab == "📦 Strategy Map":
             hole=.6, marker_colors=["#10b981", "#1e293b"]
         )])
         fig_donut.update_layout(height=300, margin=dict(t=0, b=0, l=0, r=0))
-        dark_layout(fig_donut)
+        light_layout(fig_donut)
         st.plotly_chart(fig_donut, use_container_width=True, key="strategy_donut_unique")
         
         st.markdown(f"""
