@@ -30,21 +30,21 @@ def hex_to_rgba(hex_color: str, opacity: float) -> str:
     rgb = tuple(int(hex_color[i:i + lv // 3], 16) for i in range(0, lv, lv // 3))
     return f'rgba({rgb[0]}, {rgb[1]}, {rgb[2]}, {opacity})'
 
-def dark_layout(fig: go.Figure, title: str = "", secondary_y: bool = False, yaxis_title: str = "") -> go.Figure:
-    """PlotlyのFigureにダークテーマの共通レイアウトを適用する"""
+def light_layout(fig: go.Figure, title: str = "", secondary_y: bool = False, yaxis_title: str = "") -> go.Figure:
+    """PlotlyのFigureにライトテーマ（SaaS風白基調）の共通レイアウトを適用する"""
     fig.update_layout(
         title=title,
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
-        template="plotly_dark",
+        template="plotly_white",
         margin=dict(l=20, r=20, t=50, b=40),
-        font=dict(family="Outfit, sans-serif", color="#e2e8f0"),
-        xaxis=dict(gridcolor="#1e293b", linecolor="#334155"),
-        yaxis=dict(gridcolor="#1e293b", linecolor="#334155", title=yaxis_title),
-        legend=dict(bgcolor="rgba(0,0,0,0)", bordercolor="#334155")
+        font=dict(family="Outfit, sans-serif", color="#1e293b"),
+        xaxis=dict(gridcolor="#e2e8f0", linecolor="#cbd5e1"),
+        yaxis=dict(gridcolor="#e2e8f0", linecolor="#cbd5e1", title=yaxis_title),
+        legend=dict(bgcolor="rgba(255,255,255,0.8)", bordercolor="#cbd5e1")
     )
     if secondary_y:
-        fig.update_layout(yaxis2=dict(gridcolor="#1e293b", linecolor="#334155"))
+        fig.update_layout(yaxis2=dict(gridcolor="#e2e8f0", linecolor="#cbd5e1"))
     return fig
 
 def render_metric_card(label: str, value: str, subvalue: str = "", delta: str = "", delta_color: str = "normal", is_brake: bool = False):
@@ -62,47 +62,45 @@ def render_metric_card(label: str, value: str, subvalue: str = "", delta: str = 
     </div>""", unsafe_allow_html=True)
 
 def apply_custom_css():
-    """カスタムCSSを適用する"""
+    """カスタムCSSを適用する (ライトテーマ版)"""
     st.markdown("""
     <style>
-    @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;900&family=Inter:wght@400;700&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;900&family=Inter:wght@400;600;700&display=swap');
     
-    .stApp { background: #020617; color: #f8fafc; font-family: 'Inter', sans-serif; }
+    .stApp { background: #f8fafc; color: #1e293b; font-family: 'Inter', sans-serif; }
     
-    /* グラスモーフィズム・カード */
+    /* グラスモーフィズム・カード (ライト) */
     .metric-card {
-        background: rgba(30, 41, 59, 0.4);
-        backdrop-filter: blur(8px);
-        border: 1px solid rgba(255, 255, 255, 0.05);
+        background: rgba(255, 255, 255, 0.85);
+        backdrop-filter: blur(12px);
+        border: 1px solid rgba(226, 232, 240, 0.8);
         border-radius: 16px;
         padding: 24px;
         transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
         margin-bottom: 20px;
     }
     .metric-card:hover { 
         transform: translateY(-4px); 
-        background: rgba(30, 41, 59, 0.6); 
-        border-color: rgba(167, 139, 250, 0.2);
-        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.2);
+        background: rgba(255, 255, 255, 1.0); 
+        border-color: rgba(99, 102, 241, 0.3);
+        box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.05);
     }
     
-    .metric-label { font-size: 0.85rem; color: #e2e8f0; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
-    .metric-value { font-size: 2rem; font-weight: 900; color: #ffffff; margin: 8px 0; font-family: 'Outfit', sans-serif; }
-    .metric-sub { font-size: 0.9rem; color: #cbd5e1; font-weight: 400; }
+    .metric-label { font-size: 0.85rem; color: #64748b; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; }
+    .metric-value { font-size: 2rem; font-weight: 900; color: #0f172a; margin: 8px 0; font-family: 'Outfit', sans-serif; }
+    .metric-sub { font-size: 0.9rem; color: #64748b; font-weight: 500; }
     
-    .badge-up { background: rgba(34, 197, 94, 0.1); color: #4ade80; padding: 4px 10px; border-radius: 999px; font-size: 0.75rem; font-weight: 700; border: 1px solid rgba(34, 197, 94, 0.2); }
-    .badge-down { background: rgba(239, 68, 68, 0.1); color: #f87171; padding: 4px 10px; border-radius: 999px; font-size: 0.75rem; font-weight: 700; border: 1px solid rgba(239, 68, 68, 0.2); }
-    .badge-brake { background: rgba(251, 191, 36, 0.1); color: #fbbf24; padding: 4px 10px; border-radius: 999px; font-size: 0.7rem; font-weight: 800; border: 1px solid rgba(251, 191, 36, 0.3); margin-top: 10px; display: inline-block; }
+    .badge-up { background: rgba(34, 197, 94, 0.15); color: #166534; padding: 4px 10px; border-radius: 999px; font-size: 0.75rem; font-weight: 700; border: 1px solid rgba(34, 197, 94, 0.3); }
+    .badge-down { background: rgba(239, 68, 68, 0.15); color: #991b1b; padding: 4px 10px; border-radius: 999px; font-size: 0.75rem; font-weight: 700; border: 1px solid rgba(239, 68, 68, 0.3); }
+    .badge-brake { background: rgba(245, 158, 11, 0.15); color: #b45309; padding: 4px 10px; border-radius: 999px; font-size: 0.7rem; font-weight: 800; border: 1px solid rgba(245, 158, 11, 0.3); margin-top: 10px; display: inline-block; }
     
-    /* タブ・サイドバーの装飾 */
-    .stTabs [data-baseweb="tab-list"] { gap: 10px; background: rgba(15, 23, 42, 0.5); padding: 5px; border-radius: 12px; }
-    .stTabs [data-baseweb="tab"] { height: 45px; border-radius: 8px; color: #e2e8f0; transition: all 0.2s; border: none; }
-    .stTabs [aria-selected="true"] { background: #334155; color: #ffffff; font-weight: 700; box-shadow: 0 2px 4px rgba(0,0,0,0.2); }
+    /* タブ・サイドバーの装飾 (ライト) */
+    .stTabs [data-baseweb="tab-list"] { gap: 10px; background: rgba(241, 245, 249, 0.8); padding: 5px; border-radius: 12px; }
+    .stTabs [data-baseweb="tab"] { height: 45px; border-radius: 8px; color: #475569; transition: all 0.2s; border: none; font-weight: 600; }
+    .stTabs [aria-selected="true"] { background: #ffffff; color: #0f172a; font-weight: 800; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
     
-
     /* ナビゲーション用のラジオボタン（疑似タブ）をモダンなボタン・タブ風に整形 */
-    /* st.radioの「点/円」を非表示にする */
     div[data-testid="stRadio"] div[aria-label="MainNavigation"] label[data-baseweb="radio"] > div:first-child {
         display: none !important;
     }
@@ -111,11 +109,12 @@ def apply_custom_css():
         display: flex;
         justify-content: center;
         gap: 8px;
-        background: rgba(15, 23, 42, 0.4);
+        background: rgba(241, 245, 249, 0.8); /* slate-100 */
         padding: 6px;
         border-radius: 12px;
-        border: 1px solid rgba(255, 255, 255, 0.1);
+        border: 1px solid rgba(226, 232, 240, 1.0);
         width: 100%;
+        box-shadow: inset 0 2px 4px 0 rgba(0, 0, 0, 0.02);
     }
     
     div[data-testid="stRadio"] div[aria-label="MainNavigation"] label[data-baseweb="radio"] {
@@ -136,43 +135,47 @@ def apply_custom_css():
     
     /* ホバー時 */
     div[data-testid="stRadio"] div[aria-label="MainNavigation"] label[data-baseweb="radio"]:hover {
-        background: rgba(255, 255, 255, 0.08) !important;
-        border-color: rgba(255, 255, 255, 0.1) !important;
+        background: rgba(255, 255, 255, 0.6) !important;
+        box-shadow: 0 1px 2px rgba(0,0,0,0.05) !important;
     }
 
     /* 選択中のスタイル */
     div[data-testid="stRadio"] div[aria-label="MainNavigation"] label[data-baseweb="radio"]:has(input:checked) {
-        background: rgba(167, 139, 250, 0.25) !important;
-        border-color: rgba(167, 139, 250, 0.6) !important;
-        box-shadow: 0 4px 15px rgba(167, 139, 250, 0.2) !important;
+        background: #ffffff !important;
+        border-color: rgba(226, 232, 240, 1.0) !important;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03) !important;
     }
     
     div[data-testid="stRadio"] div[aria-label="MainNavigation"] label[data-baseweb="radio"]:has(input:checked) p {
-        color: #ffffff !important;
+        color: #4f46e5 !important; /* indigo-600 */
         font-weight: 800 !important;
     }
     
     div[data-testid="stRadio"] div[aria-label="MainNavigation"] label[data-baseweb="radio"] p {
-        color: #cbd5e1 !important;
+        color: #64748b !important; /* slate-500 */
         font-weight: 600 !important;
         margin: 0 !important;
         font-size: 0.95rem !important;
         text-align: center;
     }
 
-    /* 全般的な入力ウィジェットのラベル文字色を明るくする */
+    /* 全般的な入力ウィジェットのラベル文字色をダークグレーにする */
     div[data-testid="stWidgetLabel"] p,
     div[data-testid="stMarkdownContainer"] p {
-        color: #e2e8f0 !important;
+        color: #1e293b !important;
+    }
+    /* ヘッダーや強調テキストなどはより濃く */
+    h1, h2, h3, h4, h5, h6 {
+        color: #0f172a !important;
     }
 
-    /* ヘルプ用のTooltipアイコン(?マーク)の色を明るくする */
+    /* ヘルプ用のTooltipアイコン(?マーク)の色 */
     div[data-testid="stTooltipIcon"] svg {
         stroke: #94a3b8 !important;
         fill: #94a3b8 !important;
     }
     
-    /* 通知アラート */
+    /* 通知アラート (ライト) */
     .alert-box {
         padding: 12px 20px;
         border-radius: 12px;
@@ -181,11 +184,12 @@ def apply_custom_css():
         align-items: center;
         gap: 12px;
         font-weight: 600;
-        backdrop-filter: blur(4px);
+        backdrop-filter: blur(8px);
+        box-shadow: 0 1px 3px rgba(0,0,0,0.05);
     }
-    .alert-warning { background: rgba(251,191,36,0.1); border: 1px solid rgba(251,191,36,0.4); color: #fbbf24; }
-    .alert-danger { background: rgba(248,113,113,0.1); border: 1px solid rgba(248,113,113,0.4); color: #f87171; }
-    .alert-info { background: rgba(96,165,250,0.1); border: 1px solid rgba(96,165,250,0.4); color: #60a5fa; }
+    .alert-warning { background: #fef3c7; border: 1px solid #fde68a; color: #92400e; }
+    .alert-danger { background: #fee2e2; border: 1px solid #fecaca; color: #991b1b; }
+    .alert-info { background: #e0e7ff; border: 1px solid #c7d2fe; color: #3730a3; }
     .alert-icon { font-size: 1.2rem; }
     </style>
     """, unsafe_allow_html=True)

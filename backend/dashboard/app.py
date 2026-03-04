@@ -39,7 +39,7 @@ importlib.reload(pricing_engine)
 from pricing_engine import calculate_inventory_decay_factor, calculate_pricing_result
 # 共通ユーティリティのインポート
 from dashboard.utils import (
-    apply_custom_css, dark_layout, render_metric_card, render_alerts, hex_to_rgba, log_price_history
+    apply_custom_css, light_layout, render_metric_card, render_alerts, hex_to_rgba, log_price_history
 )
 
 st.set_page_config(
@@ -114,7 +114,7 @@ def get_pricing_results(inv_df: pd.DataFrame, config: dict = None, strategy: str
 # ─── ヘッダー ──────────────────────────────────────────────────────
 st.markdown("""
 <h1>🔍 Explainable Pricing Dashboard</h1>
-<p style='color:#cbd5e1; margin-top:-12px; margin-bottom:20px;'>
+<p style='color:#64748b; margin-top:-12px; margin-bottom:20px;'>
   価格の根拠を可視化し、アルゴリズムのブラックボックス化を防ぐ —
   <span style='color:#a78bfa'>White-box Pricing Engine</span>
 </p>
@@ -171,7 +171,7 @@ with st.sidebar:
     
     st.markdown("---")
     st.markdown("### 🎛 AI Command Center")
-    st.markdown("<p style='color:#e2e8f0;font-size:.8rem'>AIの行動ルールをリアルタイム編集</p>", unsafe_allow_html=True)
+    st.markdown("<p style='color:#64748b;font-size:.8rem'>AIの行動ルールをリアルタイム編集</p>", unsafe_allow_html=True)
     
     with st.expander("🛡 セーフティガード (上下限)", expanded=True):
         max_discount = st.slider("最大割引率 (%)", 0, 80, 30, help="これ以上安くしない限界値")
@@ -1350,14 +1350,14 @@ if selected_tab == "🧪 Custom Simulator":
         # 総仕入原価（水平線）
         fig_sim.add_trace(go.Scatter(
             x=full_x, y=total_costs_line, name="総仕入原価 (損益分岐点)",
-            line=dict(color='rgba(255,255,255,0.7)', width=2, dash='dash')
+            line=dict(color='rgba(100, 116, 139, 0.5)', width=2, dash='dash')
         ), secondary_y=False)
 
         # ─── 過去実績部分 (売上 - 左軸) ───
         if past_x:
             fig_sim.add_trace(go.Scatter(
                 x=past_x, y=past_revenue, name="💰 累積売上実績 (全体合算)",
-                line=dict(color='#cbd5e1', width=3)
+                line=dict(color='#94a3b8', width=3)
             ), secondary_y=False)
             fig_sim.add_trace(go.Scatter(
                 x=past_x, y=past_revenue_h, name="💰 累積売上実績 (ホテル)",
@@ -1372,11 +1372,11 @@ if selected_tab == "🧪 Custom Simulator":
         if past_x:
             fig_sim.add_trace(go.Scatter(
                 x=past_x, y=past_h_stock_pct, name="🏨 残室割合実績 (ホテル)",
-                line=dict(color='rgba(96, 165, 250, 0.6)', width=2, dash='dot')
+                line=dict(color='rgba(59, 130, 246, 0.6)', width=2, dash='dot') # blue-500
             ), secondary_y=True)
             fig_sim.add_trace(go.Scatter(
                 x=past_x, y=past_f_stock_pct, name="✈️ 残席割合実績 (フライト)",
-                line=dict(color='rgba(192, 132, 252, 0.6)', width=2, dash='dot')
+                line=dict(color='rgba(168, 85, 247, 0.6)', width=2, dash='dot') # purple-500
             ), secondary_y=True)
 
         # ─── 未来予測部分 (共通ベースライン: 現状維持・固定価格) ───
@@ -1405,20 +1405,20 @@ if selected_tab == "🧪 Custom Simulator":
 
         # ─── 未来予測部分 (選択された戦略) ───
         if is_hybrid:
-            line_color_rev = '#4ade80' # emerald-400
-            line_color_rev_sub = 'rgba(74, 222, 128, 0.5)'
-            line_color_h = 'rgba(52, 211, 153, 0.9)'
-            line_color_f = 'rgba(45, 212, 191, 0.9)'
+            line_color_rev = '#16a34a' # green-600
+            line_color_rev_sub = 'rgba(34, 197, 94, 0.5)'
+            line_color_h = 'rgba(16, 185, 129, 0.9)' # emerald-500
+            line_color_f = 'rgba(20, 184, 166, 0.9)' # teal-500
             name_rev = "💰 予測売上 全体 (需要予測ハイブリッド)"
             name_rev_h = "💰 予測売上 ホテル (需要予測ハイブリッド)"
             name_rev_f = "💰 予測売上 フライト (需要予測ハイブリッド)"
             name_h = "🏨 予測残室割合 (需要予測ハイブリッド)"
             name_f = "✈️ 予測残席割合 (需要予測ハイブリッド)"
         else:
-            line_color_rev = '#f87171' # red-400
-            line_color_rev_sub = 'rgba(248, 113, 113, 0.5)'
-            line_color_h = 'rgba(248, 113, 113, 0.9)'
-            line_color_f = 'rgba(251, 146, 60, 0.9)'  # orange-400
+            line_color_rev = '#dc2626' # red-600
+            line_color_rev_sub = 'rgba(239, 68, 68, 0.5)'
+            line_color_h = 'rgba(239, 68, 68, 0.9)' # red-500
+            line_color_f = 'rgba(249, 115, 22, 0.9)'  # orange-500
             name_rev = "💰 予測売上 全体 (ルールベース)"
             name_rev_h = "💰 予測売上 ホテル (ルールベース)"
             name_rev_f = "💰 予測売上 フライト (ルールベース)"
@@ -1449,12 +1449,12 @@ if selected_tab == "🧪 Custom Simulator":
 
         # 基準日（V-Line）
         if past_x:
-            fig_sim.add_vline(x=past_x[-1], line_width=2, line_dash="dash", line_color="#a78bfa")
+            fig_sim.add_vline(x=past_x[-1], line_width=2, line_dash="dash", line_color="#6366f1")
             fig_sim.add_annotation(
                 x=past_x[-1], y=1.0, yref="paper",
                 text="本日 (実績/予測 境界)",
                 showarrow=False,
-                font=dict(color="#a78bfa", size=10),
+                font=dict(color="#6366f1", size=10),
                 xanchor="right", yanchor="bottom"
             )
 
@@ -1484,11 +1484,11 @@ if selected_tab == "🧪 Custom Simulator":
             )
 
         # レイアウト調整
-        dark_layout(fig_sim, secondary_y=True)
+        light_layout(fig_sim, secondary_y=True)
         fig_sim.update_layout(
             xaxis=dict(
                 title="タイムライン（右端 = 期限・出発日 D-0）",
-                gridcolor="#1e293b",
+                gridcolor="#e2e8f0",
                 dtick=10 if len(full_x) > 30 else 5
             ),
             hovermode="x unified",
@@ -1502,7 +1502,7 @@ if selected_tab == "🧪 Custom Simulator":
         
         max_stock = max(target_hotel["total_stock"], target_flight["total_stock"]) * 1.05
 
-        fig_sim.update_yaxes(title_text="累積金額 (円)", secondary_y=False, range=[0, max_y], gridcolor="#1e293b", tickformat=",d")
+        fig_sim.update_yaxes(title_text="累積金額 (円)", secondary_y=False, range=[0, max_y], gridcolor="#e2e8f0", tickformat=",d")
         fig_sim.update_yaxes(title_text="残在庫割合 (%)", secondary_y=True, range=[0, 105], gridcolor="rgba(0,0,0,0)", tickformat=".1f")
 
         st.plotly_chart(fig_sim, use_container_width=True, key="sim_timeseries_chart")
@@ -1514,11 +1514,11 @@ if selected_tab == "🧪 Custom Simulator":
         ck1, ck2, ck3 = st.columns(3)
         with ck1:
             st.markdown(f"""
-            <div style='background:rgba(148, 163, 184, 0.1); border:1px solid #94a3b8; border-radius:12px; padding:15px; text-align:center;'>
-                <div style='font-size:0.8rem; color:#94a3b8;'>① 現状維持 (固定価格・何もしない) の着地点</div>
-                <div style='font-size:1.5rem; font-weight:800; color:#e2e8f0;'>¥{int(res_n):,}</div>
-                <div style='font-size:0.8rem; margin-top:10px; color:#cbd5e1;'>🏨 販売: {int(total_sold_n_h)}室 / 売れ残り: {int(curr_n_h_stock_fin)}室</div>
-                <div style='font-size:0.8rem; color:#cbd5e1;'>✈️ 販売: {int(total_sold_n_f)}席 / 売れ残り: {int(curr_n_f_stock_fin)}席</div>
+            <div style='background:#f0f9ff; border:1px solid #94a3b8; border-radius:12px; padding:15px; text-align:center;'>
+                <div style='font-size:0.8rem; color:#64748b;'>① 現状維持 (固定価格・何もしない) の着地点</div>
+                <div style='font-size:1.5rem; font-weight:800; color:#1e293b;'>¥{int(res_n):,}</div>
+                <div style='font-size:0.8rem; margin-top:10px; color:#475569;'>🏨 販売: {int(total_sold_n_h)}室 / 売れ残り: {int(curr_n_h_stock_fin)}室</div>
+                <div style='font-size:0.8rem; color:#475569;'>✈️ 販売: {int(total_sold_n_f)}席 / 売れ残り: {int(curr_n_f_stock_fin)}席</div>
             </div>
             """, unsafe_allow_html=True)
         with ck2:
@@ -1527,8 +1527,8 @@ if selected_tab == "🧪 Custom Simulator":
             h_unsold_sel = int(curr_b_h_stock)
             f_unsold_sel = int(flight_stock_b)
             
-            box_bg = "rgba(74,222,128,0.1)" if is_hybrid else "rgba(248,113,113,0.1)"
-            box_bc = "#4ade80" if is_hybrid else "#f87171"
+            box_bg = "#f0fdf4" if is_hybrid else "#fff1f2"
+            box_bc = "#16a34a" if is_hybrid else "#dc2626"
             title = "② 需要予測ハイブリッドの理想着地点" if is_hybrid else "② ルールベース・プライシングの着地点"
             st.markdown(f"""
             <div style='background:{box_bg}; border:1px solid {box_bc}; border-radius:12px; padding:15px; text-align:center;'>
@@ -1540,18 +1540,20 @@ if selected_tab == "🧪 Custom Simulator":
             </div>
             """, unsafe_allow_html=True)
         with ck3:
+            diff_color = "#16a34a" if diff >= 0 else "#dc2626"
+            diff_bg = "#f0fdf4" if diff >= 0 else "#fff1f2"
             st.markdown(f"""
-            <div style='background:rgba(167,139,250,0.2); border:1px solid #a78bfa; border-radius:12px; padding:15px; text-align:center; box-shadow: 0 0 15px rgba(167,139,250,0.3);'>
-                <div style='font-size:0.8rem; color:#a78bfa;'>トータル収益改善の見込み</div>
-                <div style='font-size:1.5rem; font-weight:900;'>+¥{int(diff):,}</div>
-                <div style='font-size:0.8rem; margin-top:10px;'>（リスク回避後の純増利益）</div>
+            <div style='background:{diff_bg}; border:1px solid {diff_color}; border-radius:12px; padding:15px; text-align:center; box-shadow: 0 4px 12px rgba(0,0,0,0.06);'>
+                <div style='font-size:0.8rem; color:{diff_color};'>トータル収益改善の見込み</div>
+                <div style='font-size:1.5rem; font-weight:900; color:{diff_color};'>+¥{int(diff):,}</div>
+                <div style='font-size:0.8rem; margin-top:10px; color:#475569;'>（リスク回避後の純増利益）</div>
             </div>
             """, unsafe_allow_html=True)
             
         st.markdown(f"""
-        <div style='background:rgba(30,27,75,0.4); border:1px solid rgba(167,139,250,0.4); border-radius:10px; padding:15px; margin-top:20px; margin-bottom:20px;'>
-            <h5 style='margin-top:0;'>💡 AI 戦略アドバイス</h5>
-            <p style='font-size:0.9rem; color:#e2e8f0;'>
+        <div style='background:#eef2ff; border:1px solid #c7d2fe; border-radius:10px; padding:15px; margin-top:20px; margin-bottom:20px;'>
+            <h5 style='margin-top:0; color:#3730a3;'>💡 AI 戦略アドバイス</h5>
+            <p style='font-size:0.9rem; color:#1e293b;'>
                 現状維持(単品販売)のままではホテルに <b>{int(curr_n_h_stock_fin)}室</b> の売れ残りが発生し、仕入原価 <b>¥{int(curr_n_h_stock_fin * h_cost):,}</b> 分が丸損となる予測です。<br>
                 戦略適用後には販売速度を <b>{vel_b_boosted:.1f}件/日</b> まで引き上げることで、売れ残り数を <b>{int(h_unsold_sel)}室</b> まで圧縮し、機会損失を最小化します。
                 結果としてトータルの利益着地点が <b>¥{int(diff):,}</b> 改善される見込みです。
@@ -1630,4 +1632,4 @@ if selected_tab == "🧪 Custom Simulator":
 # Footer & Logs
 # ══════════════════════════════════════════════════════════════════
 last_upd = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
-st.markdown(f'<p style="color:#e2e8f0;text-align:right;font-size:.8rem">最終更新: {last_upd}</p>', unsafe_allow_html=True)
+st.markdown(f'<p style="color:#94a3b8;text-align:right;font-size:.8rem">最終更新: {last_upd}</p>', unsafe_allow_html=True)
