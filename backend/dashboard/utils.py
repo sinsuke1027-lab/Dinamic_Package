@@ -1,3 +1,4 @@
+from dashboard.theme import Theme
 """
 dashboard/utils.py
 Streamlit UI で使用するスタイル設定や共通データ変換関数を管理。
@@ -38,13 +39,13 @@ def light_layout(fig: go.Figure, title: str = "", secondary_y: bool = False, yax
         plot_bgcolor="rgba(0,0,0,0)",
         template="plotly_white",
         margin=dict(l=20, r=20, t=50, b=40),
-        font=dict(family="Outfit, sans-serif", color="#1e293b"),
-        xaxis=dict(gridcolor="#e2e8f0", linecolor="#cbd5e1"),
-        yaxis=dict(gridcolor="#e2e8f0", linecolor="#cbd5e1", title=yaxis_title),
-        legend=dict(bgcolor="rgba(255,255,255,0.8)", bordercolor="#cbd5e1")
+        font=dict(family="Outfit, sans-serif", color=Theme.text_main),
+        xaxis=dict(gridcolor=Theme.border_light, linecolor=Theme.border_dark),
+        yaxis=dict(gridcolor=Theme.border_light, linecolor=Theme.border_dark, title=yaxis_title),
+        legend=dict(bgcolor="rgba(255,255,255,0.8)", bordercolor=Theme.border_dark)
     )
     if secondary_y:
-        fig.update_layout(yaxis2=dict(gridcolor="#e2e8f0", linecolor="#cbd5e1"))
+        fig.update_layout(yaxis2=dict(gridcolor=Theme.border_light, linecolor=Theme.border_dark))
     return fig
 
 def render_metric_card(label: str, value: str, subvalue: str = "", delta: str = "", delta_color: str = "normal", is_brake: bool = False):
@@ -63,14 +64,14 @@ def render_metric_card(label: str, value: str, subvalue: str = "", delta: str = 
 
 def apply_custom_css():
     """カスタムCSSを適用する (ライトテーマ版)"""
-    st.markdown("""
+    st.markdown(f"""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;900&family=Inter:wght@400;600;700&display=swap');
     
-    .stApp { background: #f8fafc; color: #1e293b; font-family: 'Inter', sans-serif; }
+    .stApp {{ background: {Theme.bg_main}; color: {Theme.text_main}; font-family: 'Inter', sans-serif; }}
     
     /* グラスモーフィズム・カード (ライト) */
-    .metric-card {
+    .metric-card {{
         background: rgba(255, 255, 255, 0.85);
         backdrop-filter: blur(12px);
         border: 1px solid rgba(226, 232, 240, 0.8);
@@ -79,33 +80,33 @@ def apply_custom_css():
         transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
         margin-bottom: 20px;
-    }
-    .metric-card:hover { 
+    }}
+    .metric-card:hover {{ 
         transform: translateY(-4px); 
         background: rgba(255, 255, 255, 1.0); 
         border-color: rgba(99, 102, 241, 0.3);
         box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.05);
-    }
+    }}
     
-    .metric-label { font-size: 0.85rem; color: #64748b; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; }
-    .metric-value { font-size: 2rem; font-weight: 900; color: #0f172a; margin: 8px 0; font-family: 'Outfit', sans-serif; }
-    .metric-sub { font-size: 0.9rem; color: #64748b; font-weight: 500; }
+    .metric-label {{ font-size: 0.85rem; color: {Theme.text_muted}; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; }}
+    .metric-value {{ font-size: 2rem; font-weight: 900; color: {Theme.text_dark}; margin: 8px 0; font-family: 'Outfit', sans-serif; }}
+    .metric-sub {{ font-size: 0.9rem; color: {Theme.text_muted}; font-weight: 500; }}
     
-    .badge-up { background: rgba(34, 197, 94, 0.15); color: #166534; padding: 4px 10px; border-radius: 999px; font-size: 0.75rem; font-weight: 700; border: 1px solid rgba(34, 197, 94, 0.3); }
-    .badge-down { background: rgba(239, 68, 68, 0.15); color: #991b1b; padding: 4px 10px; border-radius: 999px; font-size: 0.75rem; font-weight: 700; border: 1px solid rgba(239, 68, 68, 0.3); }
-    .badge-brake { background: rgba(245, 158, 11, 0.15); color: #b45309; padding: 4px 10px; border-radius: 999px; font-size: 0.7rem; font-weight: 800; border: 1px solid rgba(245, 158, 11, 0.3); margin-top: 10px; display: inline-block; }
+    .badge-up {{ background: rgba(34, 197, 94, 0.15); color: {Theme.badge_green_text}; padding: 4px 10px; border-radius: 999px; font-size: 0.75rem; font-weight: 700; border: 1px solid rgba(34, 197, 94, 0.3); }}
+    .badge-down {{ background: rgba(239, 68, 68, 0.15); color: {Theme.badge_red_text}; padding: 4px 10px; border-radius: 999px; font-size: 0.75rem; font-weight: 700; border: 1px solid rgba(239, 68, 68, 0.3); }}
+    .badge-brake {{ background: rgba(245, 158, 11, 0.15); color: #b45309; padding: 4px 10px; border-radius: 999px; font-size: 0.7rem; font-weight: 800; border: 1px solid rgba(245, 158, 11, 0.3); margin-top: 10px; display: inline-block; }}
     
     /* タブ・サイドバーの装飾 (ライト) */
-    .stTabs [data-baseweb="tab-list"] { gap: 10px; background: rgba(241, 245, 249, 0.8); padding: 5px; border-radius: 12px; }
-    .stTabs [data-baseweb="tab"] { height: 45px; border-radius: 8px; color: #475569; transition: all 0.2s; border: none; font-weight: 600; }
-    .stTabs [aria-selected="true"] { background: #ffffff; color: #0f172a; font-weight: 800; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+    .stTabs [data-baseweb="tab-list"] {{ gap: 10px; background: rgba(241, 245, 249, 0.8); padding: 5px; border-radius: 12px; }}
+    .stTabs [data-baseweb="tab"] {{ height: 45px; border-radius: 8px; color: #475569; transition: all 0.2s; border: none; font-weight: 600; }}
+    .stTabs [aria-selected="true"] {{ background: {Theme.white}; color: {Theme.text_dark}; font-weight: 800; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }}
     
     /* ナビゲーション用のラジオボタン（疑似タブ）をモダンなボタン・タブ風に整形 */
-    div[data-testid="stRadio"] div[aria-label="MainNavigation"] label[data-baseweb="radio"] > div:first-child {
+    div[data-testid="stRadio"] div[aria-label="MainNavigation"] label[data-baseweb="radio"] > div:first-child {{
         display: none !important;
-    }
+    }}
 
-    div[data-testid="stRadio"] div[aria-label="MainNavigation"] div[role="radiogroup"] {
+    div[data-testid="stRadio"] div[aria-label="MainNavigation"] div[role="radiogroup"] {{
         display: flex;
         justify-content: center;
         gap: 8px;
@@ -115,9 +116,9 @@ def apply_custom_css():
         border: 1px solid rgba(226, 232, 240, 1.0);
         width: 100%;
         box-shadow: inset 0 2px 4px 0 rgba(0, 0, 0, 0.02);
-    }
+    }}
     
-    div[data-testid="stRadio"] div[aria-label="MainNavigation"] label[data-baseweb="radio"] {
+    div[data-testid="stRadio"] div[aria-label="MainNavigation"] label[data-baseweb="radio"] {{
         padding: 8px 20px !important;
         border-radius: 10px !important;
         transition: all 0.25s ease !important;
@@ -131,52 +132,52 @@ def apply_custom_css():
         display: flex;
         justify-content: center;
         align-items: center;
-    }
+    }}
     
     /* ホバー時 */
-    div[data-testid="stRadio"] div[aria-label="MainNavigation"] label[data-baseweb="radio"]:hover {
+    div[data-testid="stRadio"] div[aria-label="MainNavigation"] label[data-baseweb="radio"]:hover {{
         background: rgba(255, 255, 255, 0.6) !important;
         box-shadow: 0 1px 2px rgba(0,0,0,0.05) !important;
-    }
+    }}
 
     /* 選択中のスタイル */
-    div[data-testid="stRadio"] div[aria-label="MainNavigation"] label[data-baseweb="radio"]:has(input:checked) {
-        background: #ffffff !important;
+    div[data-testid="stRadio"] div[aria-label="MainNavigation"] label[data-baseweb="radio"]:has(input:checked) {{
+        background: {Theme.white} !important;
         border-color: rgba(226, 232, 240, 1.0) !important;
         box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03) !important;
-    }
+    }}
     
-    div[data-testid="stRadio"] div[aria-label="MainNavigation"] label[data-baseweb="radio"]:has(input:checked) p {
-        color: #4f46e5 !important; /* indigo-600 */
+    div[data-testid="stRadio"] div[aria-label="MainNavigation"] label[data-baseweb="radio"]:has(input:checked) p {{
+        color: {Theme.primary_hover} !important; /* indigo-600 */
         font-weight: 800 !important;
-    }
+    }}
     
-    div[data-testid="stRadio"] div[aria-label="MainNavigation"] label[data-baseweb="radio"] p {
-        color: #64748b !important; /* slate-500 */
+    div[data-testid="stRadio"] div[aria-label="MainNavigation"] label[data-baseweb="radio"] p {{
+        color: {Theme.text_muted} !important; /* slate-500 */
         font-weight: 600 !important;
         margin: 0 !important;
         font-size: 0.95rem !important;
         text-align: center;
-    }
+    }}
 
     /* 全般的な入力ウィジェットのラベル文字色をダークグレーにする */
     div[data-testid="stWidgetLabel"] p,
-    div[data-testid="stMarkdownContainer"] p {
-        color: #1e293b !important;
-    }
+    div[data-testid="stMarkdownContainer"] p {{
+        color: {Theme.text_main} !important;
+    }}
     /* ヘッダーや強調テキストなどはより濃く */
-    h1, h2, h3, h4, h5, h6 {
-        color: #0f172a !important;
-    }
+    h1, h2, h3, h4, h5, h6 {{
+        color: {Theme.text_dark} !important;
+    }}
 
     /* ヘルプ用のTooltipアイコン(?マーク)の色 */
-    div[data-testid="stTooltipIcon"] svg {
+    div[data-testid="stTooltipIcon"] svg {{
         stroke: #94a3b8 !important;
         fill: #94a3b8 !important;
-    }
+    }}
     
     /* 通知アラート (ライト) */
-    .alert-box {
+    .alert-box {{
         padding: 12px 20px;
         border-radius: 12px;
         margin-bottom: 20px;
@@ -186,96 +187,99 @@ def apply_custom_css():
         font-weight: 600;
         backdrop-filter: blur(8px);
         box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-    }
-    .alert-warning { background: #fef3c7; border: 1px solid #fde68a; color: #92400e; }
-    .alert-danger { background: #fee2e2; border: 1px solid #fecaca; color: #991b1b; }
-    .alert-info { background: #e0e7ff; border: 1px solid #c7d2fe; color: #3730a3; }
-    .alert-icon { font-size: 1.2rem; }
+    }}
+    .alert-warning {{ background: {Theme.alert_warning_bg}; border: 1px solid {Theme.alert_warning_border}; color: {Theme.alert_warning_text}; }}
+    .alert-danger {{ background: {Theme.badge_red_bg}; border: 1px solid #fecaca; color: {Theme.badge_red_text}; }}
+    .alert-info {{ background: {Theme.alert_info_bg}; border: 1px solid {Theme.alert_info_border}; color: {Theme.alert_info_text}; }}
+    .alert-icon {{ font-size: 1.2rem; }}
 
     /* ─── サイドバー ─────────────────────────────────── */
-    [data-testid="stSidebar"] {
-        background: #ffffff !important;
-        border-right: 1px solid #e2e8f0 !important;
-    }
-    [data-testid="stSidebar"] * {
-        color: #1e293b !important;
-    }
+    [data-testid="stSidebar"] {{
+        background: {Theme.white} !important;
+        border-right: 1px solid {Theme.border_light} !important;
+    }}
+    [data-testid="stSidebar"] * {{
+        color: {Theme.text_main} !important;
+    }}
     [data-testid="stSidebar"] .stMarkdown p,
     [data-testid="stSidebar"] label,
-    [data-testid="stSidebar"] span {
-        color: #1e293b !important;
-    }
-    [data-testid="stSidebar"] hr {
-        border-color: #e2e8f0 !important;
-    }
+    [data-testid="stSidebar"] span {{
+        color: {Theme.text_main} !important;
+    }}
+    [data-testid="stSidebar"] hr {{
+        border-color: {Theme.border_light} !important;
+    }}
 
     /* ─── 入力ウィジェット全般（ライト化） ────────────── */
     /* テキスト入力・セレクトボックス・スライダーのラベル */
     .stTextInput label, .stSelectbox label, .stMultiSelect label,
     .stDateInput label, .stSlider label, .stRadio label,
-    div[data-testid="stWidgetLabel"] > p {
-        color: #334155 !important;
+    div[data-testid="stWidgetLabel"] > p {{
+        color: {Theme.text_sec} !important;
         font-weight: 600 !important;
-    }
+    }}
     /* インプットボックスの背景・枠色 */
     .stTextInput input, .stSelectbox select,
     div[data-baseweb="select"] > div,
     div[data-baseweb="input"] > div,
-    div[data-baseweb="textarea"] > div {
-        background-color: #ffffff !important;
-        border-color: #cbd5e1 !important;
-        color: #1e293b !important;
-    }
+    div[data-baseweb="textarea"] > div {{
+        background-color: {Theme.white} !important;
+        border-color: {Theme.border_dark} !important;
+        color: {Theme.text_main} !important;
+    }}
     /* マルチセレクトのタグ */
-    [data-baseweb="tag"] {
-        background-color: #e0e7ff !important;
-        color: #3730a3 !important;
-    }
+    [data-baseweb="tag"] {{
+        background-color: {Theme.alert_info_bg} !important;
+        color: {Theme.alert_info_text} !important;
+    }}
     /* ドロップダウンメニュー */
-    ul[role="listbox"] {
-        background: #ffffff !important;
-        border: 1px solid #e2e8f0 !important;
-    }
-    ul[role="listbox"] li:hover {
-        background: #f1f5f9 !important;
-    }
+    ul[role="listbox"] {{
+        background: {Theme.white} !important;
+        border: 1px solid {Theme.border_light} !important;
+    }}
+    ul[role="listbox"] li, ul[role="listbox"] span, ul[role="listbox"] div {{
+        color: {Theme.text_main} !important;
+    }}
+    ul[role="listbox"] li:hover {{
+        background: {Theme.bg_hover} !important;
+    }}
     /* スライダー */
-    div[data-testid="stSlider"] .st-ae {
-        background: #6366f1 !important;
-    }
+    div[data-testid="stSlider"] .st-ae {{
+        background: {Theme.primary} !important;
+    }}
 
     /* ─── Streamlit デフォルトUI（dataframe, buttonなど）のライト化 ── */
     /* ボタン */
-    .stButton > button {
-        background: #6366f1 !important;
-        color: #ffffff !important;
+    .stButton > button {{
+        background: {Theme.primary} !important;
+        color: {Theme.white} !important;
         border: none !important;
         border-radius: 8px !important;
         font-weight: 600 !important;
-    }
-    .stButton > button:hover {
-        background: #4f46e5 !important;
-    }
+    }}
+    .stButton > button:hover {{
+        background: {Theme.primary_hover} !important;
+    }}
     /* expander */
-    details summary {
-        color: #1e293b !important;
+    details summary {{
+        color: {Theme.text_main} !important;
         font-weight: 600 !important;
-    }
-    details[open] summary {
-        color: #4f46e5 !important;
-    }
+    }}
+    details[open] summary {{
+        color: {Theme.primary_hover} !important;
+    }}
     /* dataframe */
-    .stDataFrame, .stDataFrame * {
-        color: #1e293b !important;
-    }
+    .stDataFrame, .stDataFrame * {{
+        color: {Theme.text_main} !important;
+    }}
     /* info/warning/success メッセージボックス */
-    div[data-testid="stAlert"] {
+    div[data-testid="stAlert"] {{
         border-radius: 10px !important;
-    }
+    }}
     /* caption */
-    div[data-testid="stCaptionContainer"] p {
-        color: #64748b !important;
-    }
+    div[data-testid="stCaptionContainer"] p {{
+        color: {Theme.text_muted} !important;
+    }}
     </style>
     """, unsafe_allow_html=True)
 

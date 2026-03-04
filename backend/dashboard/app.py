@@ -38,6 +38,7 @@ import pricing_engine
 importlib.reload(pricing_engine)
 from pricing_engine import calculate_inventory_decay_factor, calculate_pricing_result
 # 共通ユーティリティのインポート
+from dashboard.theme import Theme
 from dashboard.utils import (
     apply_custom_css, light_layout, render_metric_card, render_alerts, hex_to_rgba, log_price_history
 )
@@ -112,11 +113,11 @@ def get_pricing_results(inv_df: pd.DataFrame, config: dict = None, strategy: str
 
 
 # ─── ヘッダー ──────────────────────────────────────────────────────
-st.markdown("""
+st.markdown(f"""
 <h1>🔍 Explainable Pricing Dashboard</h1>
-<p style='color:#64748b; margin-top:-12px; margin-bottom:20px;'>
+<p style='color:{Theme.text_muted}; margin-top:-12px; margin-bottom:20px;'>
   価格の根拠を可視化し、アルゴリズムのブラックボックス化を防ぐ —
-  <span style='color:#a78bfa'>White-box Pricing Engine</span>
+  <span style='color:{Theme.chart_accent}'>White-box Pricing Engine</span>
 </p>
 """, unsafe_allow_html=True)
 
@@ -171,7 +172,7 @@ with st.sidebar:
     
     st.markdown("---")
     st.markdown("### 🎛 AI Command Center")
-    st.markdown("<p style='color:#64748b;font-size:.8rem'>AIの行動ルールをリアルタイム編集</p>", unsafe_allow_html=True)
+    st.markdown(f"<p style='color:{Theme.text_muted};font-size:.8rem'>AIの行動ルールをリアルタイム編集</p>", unsafe_allow_html=True)
     
     with st.expander("🛡 セーフティガード (上下限)", expanded=True):
         max_discount = st.slider("最大割引率 (%)", 0, 80, 30, help="これ以上安くしない限界値")
@@ -352,19 +353,19 @@ if selected_tab == "📈 Executive Summary":
         st.markdown(f"""
         <div class="metric-card">
             <div class="metric-label" style="color:var(--text-heading) !important;">見込み最終純利益</div>
-            <div class="metric-value" style="color:#10b981; font-size:1.8rem;">¥{int(total_expected_profit):,}</div>
+            <div class="metric-value" style="color:{Theme.success}; font-size:1.8rem;">¥{int(total_expected_profit):,}</div>
             <div class="metric-sub">前回比: +¥{int(total_expected_profit - roi_metrics['total_dynamic']):,}</div>
         </div>""", unsafe_allow_html=True)
     with f_col2:
         st.markdown(f"""
         <div class="metric-card">
             <div class="metric-label" style="color:var(--text-heading) !important;">予測売れ残り数</div>
-            <div class="metric-value" style="color:#f87171; font-size:1.8rem;">{int(total_unsold)} units</div>
+            <div class="metric-value" style="color:{Theme.danger}; font-size:1.8rem;">{int(total_unsold)} units</div>
             <div class="metric-sub">Day 0 到着時の余剰在庫</div>
         </div>""", unsafe_allow_html=True)
     with f_col3:
         risk_level = "高" if total_unsold > 50 else ("中" if total_unsold > 20 else "低")
-        risk_color = "#f87171" if risk_level == "高" else ("#fbbf24" if risk_level == "中" else "#4ade80")
+        risk_color = Theme.danger if risk_level == "高" else ("#fbbf24" if risk_level == "中" else Theme.success_light)
         st.markdown(f"""
         <div class="metric-card">
             <div class="metric-label" style="color:var(--text-heading) !important;">在庫破棄リスク</div>
@@ -394,8 +395,8 @@ if selected_tab == "📈 Executive Summary":
             # 1. 動的価格・売上 (Green, solid/filled)
             fig_roi.add_trace(go.Scatter(
                 x=df_daily["day"], y=df_daily["cum_dyn_sales"], name="動的価格・売上 (実績)",
-                mode='lines+markers', line=dict(color='#10b981', width=3),
-                fill='tozeroy', fillcolor='rgba(16,185,129,0.1)'
+                mode='lines+markers', line=dict(color=Theme.success, width=3),
+                fill='tozeroy', fillcolor=Theme.bg_success_alpha
             ))
             # 2. 固定価格・売上 (Blue, dashed)
             fig_roi.add_trace(go.Scatter(
@@ -424,7 +425,7 @@ if selected_tab == "📈 Executive Summary":
         abandoned = rescue_metrics["total_units"] - rescued
         fig_donut = go.Figure(data=[go.Pie(
             labels=["救済済", "未売/通常"], values=[rescued, abandoned],
-            hole=.6, marker_colors=["#10b981", "#1e293b"]
+            hole=.6, marker_colors=[Theme.success, Theme.text_main]
         )])
         light_layout(fig_donut, "救済状況内訳")
         st.plotly_chart(fig_donut, use_container_width=True, key="summary_donut_chart")
@@ -433,7 +434,7 @@ if selected_tab == "📈 Executive Summary":
 
     st.markdown("---")
     last_upd = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
-    st.markdown(f'<p style="color:#e2e8f0;text-align:right;font-size:.8rem">最終更新: {last_upd}</p>',
+    st.markdown(f'<p style="color:{Theme.text_sec};text-align:right;font-size:.8rem">最終更新: {last_upd}</p>',
                 unsafe_allow_html=True)
 
 
@@ -447,25 +448,25 @@ if selected_tab == "🎯 Today's Action":
     render_alerts(results, filtered_inv_df, [], get_velocity_ratio_with_ref)
 
     st.markdown(f"""
-    <div style="background:linear-gradient(135deg,#0f172a 0%,#1e293b 100%); border:1px solid rgba(56,189,248,0.4); border-radius:20px; padding:24px; margin-top:20px; margin-bottom:20px; box-shadow:0 0 30px rgba(56,189,248,0.15);">
-        <div style="font-size:0.85rem; color:#e2e8f0; text-transform:uppercase; letter-spacing:0.15em; margin-bottom:12px;">
+    <div style="background:{Theme.grad_info}; border:1px solid {Theme.border_info_alpha}; border-radius:20px; padding:24px; margin-top:20px; margin-bottom:20px; box-shadow:0 4px 15px {Theme.shadow_info_alpha};">
+        <div style="font-size:0.85rem; color:{Theme.text_dark}; text-transform:uppercase; letter-spacing:0.15em; margin-bottom:12px; font-weight:600;">
             ✨ これまでのAI導入効果・ROIサマリ (純利益ベース) ※設定した「販売実績期間」内での実績
         </div>
         <div style="display:flex; gap:20px; align-items:flex-start; flex-wrap:wrap;">
             <div style="flex:1; min-width:180px; background:rgba(255,255,255,0.05); border-radius:12px; padding:16px;">
-                <div style="font-size:0.75rem; color:#e2e8f0; margin-bottom:4px;">合計純利益リフト</div>
-                <div style="font-size:2rem; font-weight:800; color:#e2e8f0; line-height:1;">+¥{roi_metrics['lift']:,}</div>
-                <div style="font-size:0.75rem; color:#cbd5e1; margin-top:6px;">固定価格比 <span style="color:#bae6fd; font-weight:700;">+{roi_metrics['lift_pct']:.1f}%</span></div>
+                <div style="font-size:0.75rem; color:{Theme.text_sec}; margin-bottom:4px;">合計純利益リフト</div>
+                <div style="font-size:2rem; font-weight:800; color:{Theme.text_sec}; line-height:1;">+¥{roi_metrics['lift']:,}</div>
+                <div style="font-size:0.75rem; color:{Theme.text_muted}; margin-top:6px;">固定価格比 <span style="color:{Theme.info}; font-weight:700;">+{roi_metrics['lift_pct']:.1f}%</span></div>
             </div>
             <div style="flex:1; min-width:180px; background:rgba(255,255,255,0.05); border-radius:12px; padding:16px;">
-                <div style="font-size:0.75rem; color:#e2e8f0; margin-bottom:4px;">回避した廃棄損失額</div>
-                <div style="font-size:2rem; font-weight:800; color:#38bdf8; line-height:1;">+¥{roi_metrics.get('avoided_waste_loss', 0):,}</div>
-                <div style="font-size:0.75rem; color:#cbd5e1; margin-top:6px;">値引き/パッケージによる救済額</div>
+                <div style="font-size:0.75rem; color:{Theme.text_sec}; margin-bottom:4px;">回避した廃棄損失額</div>
+                <div style="font-size:2rem; font-weight:800; color:{Theme.info}; line-height:1;">+¥{roi_metrics.get('avoided_waste_loss', 0):,}</div>
+                <div style="font-size:0.75rem; color:{Theme.text_muted}; margin-top:6px;">値引き/パッケージによる救済額</div>
             </div>
             <div style="flex:1; min-width:180px; background:rgba(255,255,255,0.05); border-radius:12px; padding:16px;">
-                <div style="font-size:0.75rem; color:#e2e8f0; margin-bottom:4px;">値上げによる純増益</div>
+                <div style="font-size:0.75rem; color:{Theme.text_sec}; margin-bottom:4px;">値上げによる純増益</div>
                 <div style="font-size:2rem; font-weight:800; color:#f472b6; line-height:1;">+¥{roi_metrics.get('surge_profit', 0):,}</div>
-                <div style="font-size:0.75rem; color:#cbd5e1; margin-top:6px;">需要高騰時の自動価格調整効果</div>
+                <div style="font-size:0.75rem; color:{Theme.text_muted}; margin-top:6px;">需要高騰時の自動価格調整効果</div>
             </div>
         </div>
     </div>
@@ -478,27 +479,27 @@ if selected_tab == "🎯 Today's Action":
     ai_impact      = optimal_strategy["ai_impact"]
     total_sa       = optimal_strategy["total_standalone_profit"]
     total_opt      = optimal_strategy["total_optimized_profit"]
-    impact_color   = "#10b981" if ai_impact >= 0 else "#f87171"
+    impact_color   = Theme.success if ai_impact >= 0 else Theme.danger
     impact_sign    = "+" if ai_impact >= 0 else ""
     scenario_label = {"base": "ベース", "optimistic": "楽観", "pessimistic": "悲観"}.get(curr_scenario, "ベース")
 
     st.markdown(f"""
-    <div style="background:linear-gradient(135deg,#0d1b2a 0%,#1a2e4a 100%); border:1px solid rgba(167,139,250,0.4); border-radius:20px; padding:24px; margin-bottom:20px; box-shadow:0 0 30px rgba(167,139,250,0.15);">
-        <div style="font-size:0.85rem; color:#e2e8f0; text-transform:uppercase; letter-spacing:0.15em; margin-bottom:6px;">
+    <div style="background:{Theme.grad_ai}; border:1px solid {Theme.border_ai_alpha}; border-radius:20px; padding:24px; margin-bottom:20px; box-shadow:0 4px 15px {Theme.shadow_ai_alpha};">
+        <div style="font-size:0.85rem; color:{Theme.text_dark}; text-transform:uppercase; letter-spacing:0.15em; margin-bottom:6px; font-weight:600;">
             💡 AI最適化インパクト — シナリオ: {scenario_label}
         </div>
         <div style="display:flex; gap:30px; align-items:center; flex-wrap:wrap;">
             <div style="flex:1; min-width:160px;">
-                <div style="font-size:0.75rem; color:#e2e8f0; margin-bottom:4px;">現状維持（全単品）の予測利益</div>
-                <div style="font-size:1.5rem; font-weight:800; color:#e2e8f0;">¥{total_sa:,}</div>
+                <div style="font-size:0.75rem; color:{Theme.text_sec}; margin-bottom:4px;">現状維持（全単品）の予測利益</div>
+                <div style="font-size:1.5rem; font-weight:800; color:{Theme.text_sec};">¥{total_sa:,}</div>
             </div>
-            <div style="font-size:2rem; color:#a78bfa;">→</div>
+            <div style="font-size:2rem; color:{Theme.chart_accent};">→</div>
             <div style="flex:1; min-width:160px;">
-                <div style="font-size:0.75rem; color:#e2e8f0; margin-bottom:4px;">AI推奨プラン実行後の予測利益</div>
-                <div style="font-size:1.5rem; font-weight:800; color:#10b981;">¥{total_opt:,}</div>
+                <div style="font-size:0.75rem; color:{Theme.text_sec}; margin-bottom:4px;">AI推奨プラン実行後の予測利益</div>
+                <div style="font-size:1.5rem; font-weight:800; color:{Theme.success};">¥{total_opt:,}</div>
             </div>
-            <div style="flex:1.5; min-width:200px; background:rgba(16,185,129,0.1); border-radius:12px; padding:16px; text-align:center; border:1px solid rgba(16,185,129,0.3);">
-                <div style="font-size:0.75rem; color:#e2e8f0; margin-bottom:4px;">📈 利益改善見込み</div>
+            <div style="flex:1.5; min-width:200px; background:{Theme.bg_success_alpha}; border-radius:12px; padding:16px; text-align:center; border:1px solid {Theme.border_success_alpha};">
+                <div style="font-size:0.75rem; color:{Theme.text_sec}; margin-bottom:4px;">📈 利益改善見込み</div>
                 <div style="font-size:2.4rem; font-weight:900; color:{impact_color};">{impact_sign}¥{ai_impact:,}</div>
             </div>
         </div>
@@ -533,22 +534,22 @@ if selected_tab == "🎯 Today's Action":
             st.markdown(f"""
             <div style="background:rgba(16,185,129,0.08); border:1px solid rgba(16,185,129,0.5); border-radius:14px; padding:18px; margin:8px 0;">
                 <div style="display:flex; gap:10px; align-items:center; margin-bottom:8px; flex-wrap:wrap;">
-                    <div style="background:#10b981; color:#fff; border-radius:8px; padding:4px 10px; font-size:0.75rem; font-weight:900; white-space:nowrap;">
+                    <div style="background:{Theme.success}; color:{Theme.white}; border-radius:8px; padding:4px 10px; font-size:0.75rem; font-weight:900; white-space:nowrap;">
                         📦 パッケージ推奨
                     </div>
                     <div style="background:rgba(99,102,241,0.2); color:#a5b4fc; border:1px solid rgba(99,102,241,0.4); border-radius:6px; padding:3px 10px; font-size:0.8rem; font-weight:700;">
                         📅 {dep_label}出発
                     </div>
-                    <div style="color:#a78bfa; font-size:0.85rem; font-weight:600; margin-left:auto;">+¥{rec['gain']:,} 改善</div>
+                    <div style="color:{Theme.chart_accent}; font-size:0.85rem; font-weight:600; margin-left:auto;">+¥{rec['gain']:,} 改善</div>
                 </div>
-                <div style="font-size:1rem; font-weight:800; color:#ffffff; margin-bottom:6px;">
+                <div style="font-size:1rem; font-weight:800; color:{Theme.text_dark}; margin-bottom:6px;">
                     {item_icon} {rec['item_name']} ＋ ✈️ {rec['partner_name']}
                 </div>
                 <div style="display:flex; gap:16px; flex-wrap:wrap; margin-bottom:6px;">
-                    <span style="color:#10b981; font-weight:700;">推奨価格: ¥{rec['optimal_price']:,}</span>
-                    <span style="color:#cbd5e1;">上限セット数: {rec['max_sets']} セット</span>
+                    <span style="color:{Theme.success}; font-weight:700;">推奨価格: ¥{rec['optimal_price']:,}</span>
+                    <span style="color:{Theme.text_muted};">上限セット数: {rec['max_sets']} セット</span>
                 </div>
-                <div style="font-size:0.85rem; color:#e2e8f0;">{rec['reason']}</div>
+                <div style="font-size:0.85rem; color:{Theme.text_sec};">{rec['reason']}</div>
             </div>
             """, unsafe_allow_html=True)
 
@@ -565,9 +566,9 @@ if selected_tab == "🎯 Today's Action":
                 st.markdown(f"""
                 <div style="background:rgba(100,116,139,0.1); border:1px solid rgba(100,116,139,0.4); border-radius:10px; padding:12px; margin:6px 0; display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
                     <span style="background:rgba(99,102,241,0.15); color:#a5b4fc; border-radius:6px; padding:2px 8px; font-size:0.75rem; font-weight:700;">📅 {dep_label}</span>
-                    <span style="font-weight:700; color:#e2e8f0;">{item_icon} {rec['item_name']}</span>
-                    <span style="color:#e2e8f0; font-size:0.85rem;">現行価格: ¥{rec['optimal_price']:,}</span>
-                    <div style="width:100%; font-size:0.8rem; color:#cbd5e1; margin-top:4px;">{rec['reason']}</div>
+                    <span style="font-weight:700; color:{Theme.text_sec};">{item_icon} {rec['item_name']}</span>
+                    <span style="color:{Theme.text_sec}; font-size:0.85rem;">現行価格: ¥{rec['optimal_price']:,}</span>
+                    <div style="width:100%; font-size:0.8rem; color:{Theme.text_muted}; margin-top:4px;">{rec['reason']}</div>
                 </div>
                 """, unsafe_allow_html=True)
 
@@ -638,8 +639,9 @@ if selected_tab == "🔍 Analysis & Tracking":
         radar_scores = [inv_urgency, time_urgency, vel_score, p_elast, bundle_score]
         fig_radar = go.Figure(go.Scatterpolar(
             r=radar_scores + [radar_scores[0]], theta=radar_labels + [radar_labels[0]],
-            fill="toself", fillcolor="rgba(167,139,250,0.18)", line=dict(color="#a78bfa", width=2.5),
+            fill="toself", fillcolor=Theme.chart_fill_alpha, line=dict(color=Theme.chart_accent, width=2.5),
         ))
+        light_layout(fig_radar)
         fig_radar.update_layout(polar=dict(bgcolor="rgba(0,0,0,0)", radialaxis=dict(visible=True, range=[0, 1])), paper_bgcolor="rgba(0,0,0,0)", height=350)
         st.plotly_chart(fig_radar, use_container_width=True, key="tracking_radar_chart")
     
@@ -666,9 +668,9 @@ if selected_tab == "🔍 Analysis & Tracking":
             fig_wf = go.Figure(go.Waterfall(
                 measure=wf_measure,
                 x=wf_labels, y=wf_values,
-                increasing=dict(marker=dict(color="#f87171")),
-                decreasing=dict(marker=dict(color="#4ade80")),
-                totals=dict(marker=dict(color="#a78bfa")),
+                increasing=dict(marker=dict(color=Theme.danger)),
+                decreasing=dict(marker=dict(color=Theme.success_light)),
+                totals=dict(marker=dict(color=Theme.chart_accent)),
             ))
         else:
             wf_labels = ["在庫調整", "時期調整", "速度調整", "合計調整"]
@@ -677,9 +679,9 @@ if selected_tab == "🔍 Analysis & Tracking":
             fig_wf = go.Figure(go.Waterfall(
                 measure=["relative", "relative", "relative", "total"],
                 x=wf_labels, y=wf_values,
-                increasing=dict(marker=dict(color="#f87171")),
-                decreasing=dict(marker=dict(color="#4ade80")),
-                totals=dict(marker=dict(color="#a78bfa")),
+                increasing=dict(marker=dict(color=Theme.danger)),
+                decreasing=dict(marker=dict(color=Theme.success_light)),
+                totals=dict(marker=dict(color=Theme.chart_accent)),
             ))
         
         light_layout(fig_wf)
@@ -696,8 +698,8 @@ if selected_tab == "🔍 Analysis & Tracking":
             fig_curve = go.Figure()
             fig_curve.add_trace(go.Scatter(
                 x=item_events_filtered["booked_at"], y=item_events_filtered["cum_sales"],
-                mode="lines+markers", line=dict(color="#a78bfa", width=3),
-                fill="tozeroy", fillcolor="rgba(167,139,250,0.1)"
+                mode="lines+markers", line=dict(color=Theme.chart_accent, width=3),
+                fill="tozeroy", fillcolor=Theme.chart_fill_alpha2
             ))
             light_layout(fig_curve)
             st.plotly_chart(fig_curve, use_container_width=True, key="tracking_curve_chart_unique")
@@ -759,7 +761,7 @@ if selected_tab == "📦 Strategy Map":
                 h_name = rec['item_name']
                 f_name = rec.get('partner_name', 'Unknown Flight')
                 pairing_data.append({
-                    "pair": f"{h_name}<br><span style='font-size:10px;color:#e2e8f0'>+ {f_name}</span>",
+                    "pair": f"{h_name}<br><span style='font-size:10px;color:{Theme.text_sec}'>+ {f_name}</span>",
                     "gain": rec["gain"],
                     "text": f"+¥{rec['gain']:,}"
                 })
@@ -787,7 +789,7 @@ if selected_tab == "📦 Strategy Map":
             fig_bar.update_layout(
                 height=max(300, len(pairs) * 60 + 100),
                 margin=dict(t=20, l=150, r=50, b=20),
-                xaxis=dict(title="利益改善額 (円)", gridcolor="#1e293b", showgrid=True),
+                xaxis=dict(title="利益改善額 (円)", gridcolor=Theme.text_main, showgrid=True),
                 yaxis=dict(title="", showgrid=False)
             )
             st.plotly_chart(fig_bar, use_container_width=True, key="strategy_bar_unique")
@@ -800,7 +802,7 @@ if selected_tab == "📦 Strategy Map":
         abandoned = rescue_metrics["total_units"] - rescued
         fig_donut = go.Figure(data=[go.Pie(
             labels=["救済済", "未売不可避"], values=[rescued, abandoned],
-            hole=.6, marker_colors=["#10b981", "#1e293b"]
+            hole=.6, marker_colors=[Theme.success, Theme.text_main]
         )])
         fig_donut.update_layout(height=300, margin=dict(t=0, b=0, l=0, r=0))
         light_layout(fig_donut)
@@ -920,7 +922,7 @@ if selected_tab == "🧪 Custom Simulator":
     # パラメータ（グローバル調整）
     c_p1, c_p2 = st.columns([1, 1], gap="large")
     with c_p1:
-        st.markdown(f"<div style='margin-bottom: -15px;'><span style='background:rgba(56,189,248,0.2); color:#38bdf8; padding:2px 8px; border-radius:4px; font-size:0.75rem; font-weight:700;'>✨ AI事前探索</span> <span style='font-size:0.8rem; color:#cbd5e1;'>このペアの利益が最大化する割引額は <b>¥{auto_discount_amt:,}</b> です</span></div>", unsafe_allow_html=True)
+        st.markdown(f"<div style='margin-bottom: -15px;'><span style='background:#e0f2fe; color:{Theme.info}; padding:2px 8px; border-radius:4px; font-size:0.75rem; font-weight:700;'>✨ AI事前探索</span> <span style='font-size:0.8rem; color:{Theme.text_muted};'>このペアの利益が最大化する割引額は <b>¥{auto_discount_amt:,}</b> です</span></div>", unsafe_allow_html=True)
         # sliderのkeyをホテル・フライト・基準日の識別子ベースにすることで、条件が変わったときに毎回新しいsliderとして認識させ、初期値を強制適用する
         v_today_str = v_today.strftime("%Y%m%d") if hasattr(v_today, 'strftime') else str(v_today)
         slider_key = f"sim_discount_{target_hotel['id']}_{target_flight['id']}_{v_today_str}"
@@ -1053,27 +1055,27 @@ if selected_tab == "🧪 Custom Simulator":
 
         with si_col1:
             st.markdown(f"""
-            <div style='background:rgba(99,102,241,0.1); border:1px solid #6366f1; border-radius:12px; padding:15px;'>
+            <div style='background:rgba(99,102,241,0.1); border:1px solid {Theme.primary}; border-radius:12px; padding:15px;'>
                 <div style='font-size:0.75rem; color:#818cf8; margin-bottom:8px; letter-spacing:0.05em;'>📦 パッケージ価格構成</div>
                 <table style='width:100%; font-size:0.85rem; border-collapse:collapse;'>
                     <tr>
-                        <td style='padding:4px 0; color:#e2e8f0;'>🏨 {target_hotel['name'][:20]}</td>
-                        <td style='text-align:right; color:#e2e8f0;'>¥{h_price:,}</td>
-                        <td style='text-align:right; color:#f87171; font-size:0.75rem;'>&nbsp;(-¥{int(h_discount):,})</td>
+                        <td style='padding:4px 0; color:{Theme.text_sec};'>🏨 {target_hotel['name'][:20]}</td>
+                        <td style='text-align:right; color:{Theme.text_sec};'>¥{h_price:,}</td>
+                        <td style='text-align:right; color:{Theme.danger}; font-size:0.75rem;'>&nbsp;(-¥{int(h_discount):,})</td>
                     </tr>
                     <tr>
-                        <td style='padding:4px 0; color:#e2e8f0;'>✈️ {target_flight['name'][:20]}</td>
-                        <td style='text-align:right; color:#e2e8f0;'>¥{f_price:,}</td>
-                        <td style='text-align:right; color:#f87171; font-size:0.75rem;'>&nbsp;(-¥{int(f_discount):,})</td>
+                        <td style='padding:4px 0; color:{Theme.text_sec};'>✈️ {target_flight['name'][:20]}</td>
+                        <td style='text-align:right; color:{Theme.text_sec};'>¥{f_price:,}</td>
+                        <td style='text-align:right; color:{Theme.danger}; font-size:0.75rem;'>&nbsp;(-¥{int(f_discount):,})</td>
                     </tr>
-                    <tr style='border-top:1px solid #334155;'>
+                    <tr style='border-top:1px solid {Theme.text_sec};'>
                         <td style='padding:8px 0 4px; color:#818cf8; font-weight:700;'>🎁 定価合計</td>
                         <td style='text-align:right; color:#818cf8; font-size:0.9rem; font-weight:600;'>¥{pkg_price_before_disc:,}</td>
                         <td></td>
                     </tr>
                     <tr>
-                        <td style='padding:4px 0; color:#4ade80; font-weight:700;'>🏷️ 割引後パッケージ価格</td>
-                        <td style='text-align:right; color:#4ade80; font-size:1.2rem; font-weight:900;'>¥{pkg_price_after_disc:,}</td>
+                        <td style='padding:4px 0; color:{Theme.success_light}; font-weight:700;'>🏷️ 割引後パッケージ価格</td>
+                        <td style='text-align:right; color:{Theme.success_light}; font-size:1.2rem; font-weight:900;'>¥{pkg_price_after_disc:,}</td>
                         <td></td>
                     </tr>
                 </table>
@@ -1084,40 +1086,40 @@ if selected_tab == "🧪 Custom Simulator":
             h_stock_pct = int(h_stock / target_hotel['total_stock'] * 100) if target_hotel['total_stock'] else 0
             f_stock_pct = int(f_stock / target_flight['total_stock'] * 100) if target_flight['total_stock'] else 0
             st.markdown(f"""
-            <div style='background:rgba(15,23,42,0.8); border:1px solid #1e293b; border-radius:12px; padding:15px; height:100%;'>
+            <div style='background:{Theme.white}; border:1px solid {Theme.border_light}; border-radius:12px; padding:15px; height:100%;'>
                 <div style='font-size:0.75rem; color:#818cf8; margin-bottom:10px; letter-spacing:0.05em;'>📦 現在の残件数 (基準日時点)</div>
                 <div style='margin-bottom:10px;'>
-                    <div style='font-size:0.75rem; color:#e2e8f0;'>🏨 ホテル</div>
-                    <div style='font-size:1.4rem; font-weight:800; color:#e2e8f0;'>{h_stock}<span style='font-size:0.75rem; color:#e2e8f0;'> / {target_hotel['total_stock']}室</span></div>
-                    <div style='background:#1e293b; border-radius:4px; height:6px; margin-top:4px;'>
-                        <div style='background:#6366f1; height:6px; border-radius:4px; width:{h_stock_pct}%;'></div>
+                    <div style='font-size:0.75rem; color:{Theme.text_sec};'>🏨 ホテル</div>
+                    <div style='font-size:1.4rem; font-weight:800; color:{Theme.text_sec};'>{h_stock}<span style='font-size:0.75rem; color:{Theme.text_sec};'> / {target_hotel['total_stock']}室</span></div>
+                    <div style='background:{Theme.border_light}; border-radius:4px; height:6px; margin-top:4px;'>
+                        <div style='background:{Theme.primary}; height:6px; border-radius:4px; width:{h_stock_pct}%;'></div>
                     </div>
-                    <div style='font-size:0.7rem; color:#cbd5e1; margin-top:2px;'>残存率 {h_stock_pct}%</div>
+                    <div style='font-size:0.7rem; color:{Theme.text_muted}; margin-top:2px;'>残存率 {h_stock_pct}%</div>
                 </div>
                 <div>
-                    <div style='font-size:0.75rem; color:#e2e8f0;'>✈️ フライト</div>
-                    <div style='font-size:1.4rem; font-weight:800; color:#e2e8f0;'>{f_stock}<span style='font-size:0.75rem; color:#e2e8f0;'> / {target_flight['total_stock']}席</span></div>
-                    <div style='background:#1e293b; border-radius:4px; height:6px; margin-top:4px;'>
-                        <div style='background:#6366f1; height:6px; border-radius:4px; width:{f_stock_pct}%;'></div>
+                    <div style='font-size:0.75rem; color:{Theme.text_sec};'>✈️ フライト</div>
+                    <div style='font-size:1.4rem; font-weight:800; color:{Theme.text_sec};'>{f_stock}<span style='font-size:0.75rem; color:{Theme.text_sec};'> / {target_flight['total_stock']}席</span></div>
+                    <div style='background:{Theme.border_light}; border-radius:4px; height:6px; margin-top:4px;'>
+                        <div style='background:{Theme.primary}; height:6px; border-radius:4px; width:{f_stock_pct}%;'></div>
                     </div>
-                    <div style='font-size:0.7rem; color:#cbd5e1; margin-top:2px;'>残存率 {f_stock_pct}%</div>
+                    <div style='font-size:0.7rem; color:{Theme.text_muted}; margin-top:2px;'>残存率 {f_stock_pct}%</div>
                 </div>
             </div>
             """, unsafe_allow_html=True)
 
         with si_col3:
             st.markdown(f"""
-            <div style='background:rgba(15,23,42,0.8); border:1px solid #1e293b; border-radius:12px; padding:15px; height:100%;'>
+            <div style='background:{Theme.white}; border:1px solid {Theme.border_light}; border-radius:12px; padding:15px; height:100%;'>
                 <div style='font-size:0.75rem; color:#818cf8; margin-bottom:10px; letter-spacing:0.05em;'>⏳ 出発まで {lead_days}日</div>
                 <div style='margin-bottom:8px;'>
-                    <div style='font-size:0.75rem; color:#e2e8f0;'>🪨 対象ホテル</div>
-                    <div style='font-size:0.8rem; color:#e2e8f0;'>{target_hotel['name'][:18]}</div>
-                    <div style='font-size:0.7rem; color:#cbd5e1;'>出発日: {target_hotel.get('departure_date', '---')}</div>
+                    <div style='font-size:0.75rem; color:{Theme.text_sec};'>🪨 対象ホテル</div>
+                    <div style='font-size:0.8rem; color:{Theme.text_sec};'>{target_hotel['name'][:18]}</div>
+                    <div style='font-size:0.7rem; color:{Theme.text_muted};'>出発日: {target_hotel.get('departure_date', '---')}</div>
                 </div>
                 <div>
-                    <div style='font-size:0.75rem; color:#e2e8f0;'>✈ 対象フライト</div>
-                    <div style='font-size:0.8rem; color:#e2e8f0;'>{target_flight['name'][:18]}</div>
-                    <div style='font-size:0.7rem; color:#cbd5e1;'>出発日: {target_flight.get('departure_date', '---')}</div>
+                    <div style='font-size:0.75rem; color:{Theme.text_sec};'>✈ 対象フライト</div>
+                    <div style='font-size:0.8rem; color:{Theme.text_sec};'>{target_flight['name'][:18]}</div>
+                    <div style='font-size:0.7rem; color:{Theme.text_muted};'>出発日: {target_flight.get('departure_date', '---')}</div>
                 </div>
             </div>
             """, unsafe_allow_html=True)
@@ -1449,12 +1451,12 @@ if selected_tab == "🧪 Custom Simulator":
 
         # 基準日（V-Line）
         if past_x:
-            fig_sim.add_vline(x=past_x[-1], line_width=2, line_dash="dash", line_color="#6366f1")
+            fig_sim.add_vline(x=past_x[-1], line_width=2, line_dash="dash", line_color=Theme.primary)
             fig_sim.add_annotation(
                 x=past_x[-1], y=1.0, yref="paper",
                 text="本日 (実績/予測 境界)",
                 showarrow=False,
-                font=dict(color="#6366f1", size=10),
+                font=dict(color=Theme.primary, size=10),
                 xanchor="right", yanchor="bottom"
             )
 
@@ -1488,7 +1490,7 @@ if selected_tab == "🧪 Custom Simulator":
         fig_sim.update_layout(
             xaxis=dict(
                 title="タイムライン（右端 = 期限・出発日 D-0）",
-                gridcolor="#e2e8f0",
+                gridcolor=Theme.border_light,
                 dtick=10 if len(full_x) > 30 else 5
             ),
             hovermode="x unified",
@@ -1502,7 +1504,7 @@ if selected_tab == "🧪 Custom Simulator":
         
         max_stock = max(target_hotel["total_stock"], target_flight["total_stock"]) * 1.05
 
-        fig_sim.update_yaxes(title_text="累積金額 (円)", secondary_y=False, range=[0, max_y], gridcolor="#e2e8f0", tickformat=",d")
+        fig_sim.update_yaxes(title_text="累積金額 (円)", secondary_y=False, range=[0, max_y], gridcolor=Theme.border_light, tickformat=",d")
         fig_sim.update_yaxes(title_text="残在庫割合 (%)", secondary_y=True, range=[0, 105], gridcolor="rgba(0,0,0,0)", tickformat=".1f")
 
         st.plotly_chart(fig_sim, use_container_width=True, key="sim_timeseries_chart")
@@ -1515,8 +1517,8 @@ if selected_tab == "🧪 Custom Simulator":
         with ck1:
             st.markdown(f"""
             <div style='background:#f0f9ff; border:1px solid #94a3b8; border-radius:12px; padding:15px; text-align:center;'>
-                <div style='font-size:0.8rem; color:#64748b;'>① 現状維持 (固定価格・何もしない) の着地点</div>
-                <div style='font-size:1.5rem; font-weight:800; color:#1e293b;'>¥{int(res_n):,}</div>
+                <div style='font-size:0.8rem; color:{Theme.text_muted};'>① 現状維持 (固定価格・何もしない) の着地点</div>
+                <div style='font-size:1.5rem; font-weight:800; color:{Theme.text_main};'>¥{int(res_n):,}</div>
                 <div style='font-size:0.8rem; margin-top:10px; color:#475569;'>🏨 販売: {int(total_sold_n_h)}室 / 売れ残り: {int(curr_n_h_stock_fin)}室</div>
                 <div style='font-size:0.8rem; color:#475569;'>✈️ 販売: {int(total_sold_n_f)}席 / 売れ残り: {int(curr_n_f_stock_fin)}席</div>
             </div>
@@ -1551,9 +1553,9 @@ if selected_tab == "🧪 Custom Simulator":
             """, unsafe_allow_html=True)
             
         st.markdown(f"""
-        <div style='background:#eef2ff; border:1px solid #c7d2fe; border-radius:10px; padding:15px; margin-top:20px; margin-bottom:20px;'>
-            <h5 style='margin-top:0; color:#3730a3;'>💡 AI 戦略アドバイス</h5>
-            <p style='font-size:0.9rem; color:#1e293b;'>
+        <div style='background:#eef2ff; border:1px solid {Theme.alert_info_border}; border-radius:10px; padding:15px; margin-top:20px; margin-bottom:20px;'>
+            <h5 style='margin-top:0; color:{Theme.alert_info_text};'>💡 AI 戦略アドバイス</h5>
+            <p style='font-size:0.9rem; color:{Theme.text_main};'>
                 現状維持(単品販売)のままではホテルに <b>{int(curr_n_h_stock_fin)}室</b> の売れ残りが発生し、仕入原価 <b>¥{int(curr_n_h_stock_fin * h_cost):,}</b> 分が丸損となる予測です。<br>
                 戦略適用後には販売速度を <b>{vel_b_boosted:.1f}件/日</b> まで引き上げることで、売れ残り数を <b>{int(h_unsold_sel)}室</b> まで圧縮し、機会損失を最小化します。
                 結果としてトータルの利益着地点が <b>¥{int(diff):,}</b> 改善される見込みです。
