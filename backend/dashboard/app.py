@@ -36,8 +36,7 @@ from packaging_engine import (
 )
 import pricing_engine
 importlib.reload(pricing_engine)
-from pricing_engine import calculate_inventory_decay_factor
-
+from pricing_engine import calculate_inventory_decay_factor, calculate_pricing_result
 # 共通ユーティリティのインポート
 from dashboard.utils import (
     apply_custom_css, dark_layout, render_metric_card, render_alerts, hex_to_rgba, log_price_history
@@ -318,14 +317,35 @@ if selected_tab == "📈 Executive Summary":
     st.markdown(f'<p class="section-description">※選択中のシナリオ: <b>{curr_scenario.upper()}</b> に基づく Day 0 までの予測</p>', unsafe_allow_html=True)
     
     # 全商品の予測を集計
+    # 最終的な着地利益 ＝ (過去の実績売上 ＋ 未販売在庫の予測売上) － (全在庫の仕入原価)
     total_expected_profit = 0
     total_unsold = 0
+    
+    total_past_revenue = 0
+    total_full_cost = 0
+    total_future_revenue = 0
+
+    all_events = load_booking_events()
+
     for r in results:
         inv = filtered_inv_df[filtered_inv_df["id"] == r["inventory_id"]].iloc[0]
-        # 原価（cost）を base_price * 0.5 と仮定した簡易コスト算出
-        forecast = calculate_demand_forecast(r["inventory_id"], r["lead_days"], int(inv["remaining_stock"]), int(inv["total_stock"]), r["base_price"], int(r["base_price"]*0.5), reference_date=v_today)
-        total_expected_profit += forecast[curr_scenario]["expected_profit"]
+        cost = int(r["base_price"] * 0.9) # 原価率90%
+        total_full_cost += int(inv["total_stock"] * cost)
+
+        # 過去の実績売上（選択された日付フィルタに関わらず、Virtual Todayまでの売上を計上）
+        if not all_events.empty:
+            past_events = all_events[(all_events["inventory_id"] == r["inventory_id"]) & (pd.to_datetime(all_events["booked_at"]).dt.date <= v_today)]
+            if not past_events.empty:
+                total_past_revenue += past_events["sold_price"].sum()
+
+        # 未来の予測売上（原価を0として売上だけ取得する。利益計算は全体で行うため）
+        forecast = calculate_demand_forecast(r["inventory_id"], r["lead_days"], int(inv["remaining_stock"]), int(inv["total_stock"]), r["base_price"], 0, reference_date=v_today)
+        
+        # expected_profit は ここでは原価0を渡しているので「未来の売上額」となる
+        total_future_revenue += forecast[curr_scenario]["expected_profit"]
         total_unsold += forecast[curr_scenario]["unsold_stock"]
+
+    total_expected_profit = total_past_revenue + total_future_revenue - total_full_cost
 
     f_col1, f_col2, f_col3 = st.columns(3)
     with f_col1:
@@ -855,11 +875,58 @@ if selected_tab == "🧪 Custom Simulator":
 
     st.markdown("---")
     
+    # ─── 自動最適割引額の事前計算 ───
+    auto_discount_amt = 8000
+    if target_hotel is not None and target_flight is not None:
+        try:
+            from packaging_engine import find_optimal_bundle_discount
+            # dfからの抽出値は辞書相当の振る舞いをするため、必要なキーを辞書化して渡す
+            h_cost = int(target_hotel["base_price"] * 0.9)
+            f_cost = int(target_flight["base_price"] * 0.9)
+            
+            # f_pricing を一時計算してVR等を取得
+            f_pricing = next((r for r in results if r["inventory_id"] == target_flight["id"]), None)
+            from packaging_engine import get_velocity_ratio
+            lead_days_search = (datetime.fromisoformat(str(target_flight.get("departure_date"))).date() - v_today).days if target_flight.get("departure_date") else 30
+            
+            mock_h = {
+                "id": target_hotel["id"],
+                "current_price": next((r["final_price"] for r in results if r["inventory_id"] == target_hotel["id"]), target_hotel["base_price"]),
+                "base_price": target_hotel["base_price"],
+                "lead_days": max(1, lead_days_search),
+                "remaining_stock": target_hotel["remaining_stock"],
+                "total_stock": target_hotel["total_stock"],
+                "cost": h_cost,
+                "elasticity": target_hotel.get("elasticity", -1.5)
+            }
+            mock_f = {
+                "id": target_flight["id"],
+                "current_price": next((r["final_price"] for r in results if r["inventory_id"] == target_flight["id"]), target_flight["base_price"]),
+                "base_price": target_flight["base_price"],
+                "lead_days": max(1, lead_days_search),
+                "remaining_stock": target_flight["remaining_stock"],
+                "total_stock": target_flight["total_stock"],
+                "cost": f_cost,
+                "velocity_ratio": get_velocity_ratio(target_flight["id"], int(target_flight["total_stock"]), int(target_flight["remaining_stock"]), max(1, lead_days_search), reference_date=v_today) or 1.0,
+                "elasticity": target_flight.get("elasticity", -1.5)
+            }
+            
+            market_condition = st.session_state.get("market_scenario", "base")
+            optimal_disc, _ = find_optimal_bundle_discount(mock_h, mock_f, market_condition, reference_date=v_today)
+            auto_discount_amt = optimal_disc
+        except Exception as e:
+            auto_discount_amt = 8000
+
     # パラメータ（グローバル調整）
     c_p1, c_p2 = st.columns([1, 1], gap="large")
     with c_p1:
-        total_discount = st.slider("💰 パッケージ割引総額 (円)", 0, 20000, 8000, step=500, key="sim_discount")
+        st.markdown(f"<div style='margin-bottom: -15px;'><span style='background:rgba(56,189,248,0.2); color:#38bdf8; padding:2px 8px; border-radius:4px; font-size:0.75rem; font-weight:700;'>✨ AI事前探索</span> <span style='font-size:0.8rem; color:#cbd5e1;'>このペアの利益が最大化する割引額は <b>¥{auto_discount_amt:,}</b> です</span></div>", unsafe_allow_html=True)
+        # sliderのkeyをホテル・フライト・基準日の識別子ベースにすることで、条件が変わったときに毎回新しいsliderとして認識させ、初期値を強制適用する
+        v_today_str = v_today.strftime("%Y%m%d") if hasattr(v_today, 'strftime') else str(v_today)
+        slider_key = f"sim_discount_{target_hotel['id']}_{target_flight['id']}_{v_today_str}"
+        total_discount = st.slider("💰 パッケージ割引総額 (円)", 0, 20000, int(auto_discount_amt), step=100, key=slider_key)
     with c_p2:
+        st.markdown("<div style='margin-bottom: 5px; height:0px;'>&nbsp;</div>", unsafe_allow_html=True)
         split_ratio = st.slider("🤝 割引負担の割合 (ホテル負担 %)", 0, 100, 80, help="ホテルの在庫が重い場合は、ホテルの負担を増やしてフライト側の利益（単品売上の期待値）を守ります。", key="sim_split")
 
     if target_hotel is not None and target_flight is not None:
@@ -869,8 +936,102 @@ if selected_tab == "🧪 Custom Simulator":
         h_pricing = next((r for r in results if r["inventory_id"] == target_hotel["id"]), None)
         
         lead_days = f_pricing["lead_days"] or 30
-        h_stock = target_hotel["remaining_stock"]
-        f_stock = target_flight["remaining_stock"]
+
+        # ─── 過去実績の集計 (販売開始日〜基準日) ───
+        # ※ 未来シミュレーションの初期在庫パラメーターを正しく設定するため、シミュレーション実行前に過去実績を計算します。
+        dep_dt = pd.to_datetime(target_hotel.get("departure_date", "") or target_flight.get("departure_date", ""))
+        
+        try:
+            h_proc_dt = pd.to_datetime(target_hotel.get("procurement_date"))
+            h_lead = (dep_dt.date() - h_proc_dt.date()).days
+        except Exception:
+            h_lead = 90
+            
+        try:
+            f_proc_dt = pd.to_datetime(target_flight.get("procurement_date"))
+            f_lead = (dep_dt.date() - f_proc_dt.date()).days
+        except Exception:
+            f_lead = 90
+
+        total_lead_days = max(h_lead, f_lead)
+        v_today_dt = pd.to_datetime(v_today)
+        v_today_date = v_today_dt.date()
+            
+        past_x = []
+        past_revenue = []
+        past_revenue_h = []
+        past_revenue_f = []
+        past_h_stock = []
+        past_f_stock = []
+        
+        if not all_events.empty:
+            all_events["booked_date"] = pd.to_datetime(all_events["booked_at"]).dt.date
+            past_events_h = all_events[(all_events["inventory_id"] == target_hotel["id"]) & (all_events["booked_date"] <= v_today_date)]
+            past_events_f = all_events[(all_events["inventory_id"] == target_flight["id"]) & (all_events["booked_date"] <= v_today_date)]
+        else:
+            past_events_h = pd.DataFrame()
+            past_events_f = pd.DataFrame()
+        
+        total_initial_cost = (target_hotel["total_stock"] * target_hotel["base_price"] * 0.9) + (target_flight["total_stock"] * target_flight["base_price"] * 0.9)
+        cum_rev = 0
+        cum_rev_h = 0
+        cum_rev_f = 0
+        current_h_stk = target_hotel["total_stock"]
+        current_f_stk = target_flight["total_stock"]
+
+        if not past_events_h.empty:
+            past_events_h = past_events_h.copy()
+            past_events_h["booked_date_str"] = pd.to_datetime(past_events_h["booked_at"]).dt.strftime("%Y-%m-%d")
+        if not past_events_f.empty:
+            past_events_f = past_events_f.copy()
+            past_events_f["booked_date_str"] = pd.to_datetime(past_events_f["booked_at"]).dt.strftime("%Y-%m-%d")
+
+        for d in range(total_lead_days, lead_days, -1):
+            current_date_dt = dep_dt - timedelta(days=d)
+            current_date_str = current_date_dt.strftime("%Y-%m-%d")
+            past_x.append(f"D-{d}")
+            
+            if d <= h_lead:
+                if not past_events_h.empty:
+                    day_sales_h = past_events_h[past_events_h["booked_date_str"] == current_date_str]
+                    sales_val_h = day_sales_h["sold_price"].sum()
+                    cum_rev += sales_val_h
+                    cum_rev_h += sales_val_h
+                    current_h_stk -= day_sales_h["quantity"].sum()
+                past_revenue_h.append(cum_rev_h)
+                past_h_stock.append(int(current_h_stk))
+            else:
+                past_revenue_h.append(None)
+                past_h_stock.append(None)
+                
+            if d <= f_lead:
+                if not past_events_f.empty:
+                    day_sales_f = past_events_f[past_events_f["booked_date_str"] == current_date_str]
+                    sales_val_f = day_sales_f["sold_price"].sum()
+                    cum_rev += sales_val_f
+                    cum_rev_f += sales_val_f
+                    current_f_stk -= day_sales_f["quantity"].sum()
+                past_revenue_f.append(cum_rev_f)
+                past_f_stock.append(int(current_f_stk))
+            else:
+                past_revenue_f.append(None)
+                past_f_stock.append(None)
+                
+            if d <= max(h_lead, f_lead):
+                past_revenue.append(cum_rev)
+            else:
+                past_revenue.append(None)
+
+        # UI表示およびシミュレーション引き渡し用の残在庫を、過去実績の最終値に更新
+        def get_last_valid(lst):
+            for item in reversed(lst):
+                if item is not None:
+                    return item
+            return 0
+            
+        # DB上のズレを防ぐため、実績がない場合はDB値を利用
+        h_stock = get_last_valid(past_h_stock) if past_x and get_last_valid(past_h_stock) > 0 else target_hotel["remaining_stock"]
+        f_stock = get_last_valid(past_f_stock) if past_x and get_last_valid(past_f_stock) > 0 else target_flight["remaining_stock"]
         
         h_cost = target_hotel["base_price"] * 0.9 # 仮の原価
         f_cost = target_flight["base_price"] * 0.9
@@ -893,7 +1054,7 @@ if selected_tab == "🧪 Custom Simulator":
         with si_col1:
             st.markdown(f"""
             <div style='background:rgba(99,102,241,0.1); border:1px solid #6366f1; border-radius:12px; padding:15px;'>
-                <div style='font-size:0.75rem; color:#818cf8; margin-bottom:8px; letter-spacing:0.05em;'>ἄ8 パッケージ価格構成</div>
+                <div style='font-size:0.75rem; color:#818cf8; margin-bottom:8px; letter-spacing:0.05em;'>📦 パッケージ価格構成</div>
                 <table style='width:100%; font-size:0.85rem; border-collapse:collapse;'>
                     <tr>
                         <td style='padding:4px 0; color:#e2e8f0;'>🏨 {target_hotel['name'][:20]}</td>
@@ -918,13 +1079,13 @@ if selected_tab == "🧪 Custom Simulator":
                 </table>
             </div>
             """, unsafe_allow_html=True)
-
+            
         with si_col2:
             h_stock_pct = int(h_stock / target_hotel['total_stock'] * 100) if target_hotel['total_stock'] else 0
             f_stock_pct = int(f_stock / target_flight['total_stock'] * 100) if target_flight['total_stock'] else 0
             st.markdown(f"""
             <div style='background:rgba(15,23,42,0.8); border:1px solid #1e293b; border-radius:12px; padding:15px; height:100%;'>
-                <div style='font-size:0.75rem; color:#818cf8; margin-bottom:10px; letter-spacing:0.05em;'>📦 現在の残件数</div>
+                <div style='font-size:0.75rem; color:#818cf8; margin-bottom:10px; letter-spacing:0.05em;'>📦 現在の残件数 (基準日時点)</div>
                 <div style='margin-bottom:10px;'>
                     <div style='font-size:0.75rem; color:#e2e8f0;'>🏨 ホテル</div>
                     <div style='font-size:1.4rem; font-weight:800; color:#e2e8f0;'>{h_stock}<span style='font-size:0.75rem; color:#e2e8f0;'> / {target_hotel['total_stock']}室</span></div>
@@ -978,229 +1139,212 @@ if selected_tab == "🧪 Custom Simulator":
         # ---------------------------------------------------------
         # フェーズ27: 共通シミュレーションエンジンへの統合
         # ---------------------------------------------------------
-        # 準備
-        h_item_sim = {
+        # 市場シナリオを取得
+        market_condition = st.session_state.get("market_scenario", "base")
+        
+        # 1. ルールベースのシミュレーション
+        h_pricing_rule = calculate_pricing_result(
+            inventory_id=target_hotel["id"],
+            name=target_hotel["name"],
+            base_price=target_hotel["base_price"],
+            total_stock=target_hotel["total_stock"],
+            remaining_stock=h_stock,
+            departure_date=target_hotel.get("departure_date"),
+            elasticity=target_hotel.get("elasticity", -1.5),
+            reference_date=v_today,
+            strategy="rule_based"
+        )
+        f_pricing_rule = calculate_pricing_result(
+            inventory_id=target_flight["id"],
+            name=target_flight["name"],
+            base_price=target_flight["base_price"],
+            total_stock=target_flight["total_stock"],
+            remaining_stock=f_stock,
+            departure_date=target_flight.get("departure_date"),
+            elasticity=target_flight.get("elasticity", -1.5),
+            reference_date=v_today,
+            strategy="rule_based"
+        )
+        h_item_sim_rule = {
             "id": target_hotel["id"],
             "remaining_stock": h_stock,
             "total_stock": target_hotel["total_stock"],
             "base_price": target_hotel["base_price"],
-            "current_price": h_pricing["final_price"],
+            "current_price": h_pricing_rule["final_price"],
             "original_price": target_hotel.get("current_price", target_hotel["base_price"]),
             "cost": int(target_hotel["base_price"] * 0.9),
             "elasticity": target_hotel.get("elasticity", -1.5)
         }
-        f_item_sim = {
+        f_item_sim_rule = {
             "id": target_flight["id"],
             "remaining_stock": f_stock,
             "total_stock": target_flight["total_stock"],
             "base_price": target_flight["base_price"],
-            "current_price": f_pricing["final_price"],
+            "current_price": f_pricing_rule["final_price"],
             "original_price": target_flight.get("current_price", target_flight["base_price"]),
             "cost": int(target_flight["base_price"] * 0.9),
-            "velocity_ratio": f_pricing.get("velocity_ratio") or 1.0,
+            "velocity_ratio": f_pricing_rule.get("velocity_ratio") or 1.0,
             "elasticity": target_flight.get("elasticity", -1.5)
         }
-        
-        # 市場シナリオを取得
-        market_condition = st.session_state.get("market_scenario", "base")
-        
-        # 共通関数呼び出し
-        sim_res = simulate_sales_scenario(
-            h_item_sim, f_item_sim, int(total_discount), lead_days, market_condition, reference_date=v_today
+        sim_rule = simulate_sales_scenario(
+            h_item_sim_rule, f_item_sim_rule, int(total_discount), lead_days, market_condition, reference_date=v_today
         )
-        history = sim_res["history"]
-        
-        # グラフ用データの抽出
-        days_x = [f"D-{h['day_idx']}" for h in history]
-        scenario_a_revenue = [h["revenue_a"] for h in history]
-        scenario_b_revenue = [h["revenue_b"] for h in history]
-        potential_waste_a = [h["potential_waste_a"] for h in history]
-        potential_waste_b = [h["potential_waste_b"] for h in history]
 
-        # ─── 過去実績の集計 (販売開始日〜基準日) ───
-        # 1. 販売開始日の特定とリードタイム算出
-        dep_dt = pd.to_datetime(target_hotel.get("departure_date", "") or target_flight.get("departure_date", ""))
-        
-        try:
-            h_proc_dt = pd.to_datetime(target_hotel.get("procurement_date"))
-            h_lead = (dep_dt.date() - h_proc_dt.date()).days
-        except Exception:
-            h_lead = 90
-            
-        try:
-            f_proc_dt = pd.to_datetime(target_flight.get("procurement_date"))
-            f_lead = (dep_dt.date() - f_proc_dt.date()).days
-        except Exception:
-            f_lead = 90
+        # 2. 需要予測ベースのシミュレーション
+        h_pricing_demand = calculate_pricing_result(
+            inventory_id=target_hotel["id"],
+            name=target_hotel["name"],
+            base_price=target_hotel["base_price"],
+            total_stock=target_hotel["total_stock"],
+            remaining_stock=h_stock,
+            departure_date=target_hotel.get("departure_date"),
+            elasticity=target_hotel.get("elasticity", -1.5),
+            reference_date=v_today,
+            strategy="demand_based"
+        )
+        f_pricing_demand = calculate_pricing_result(
+            inventory_id=target_flight["id"],
+            name=target_flight["name"],
+            base_price=target_flight["base_price"],
+            total_stock=target_flight["total_stock"],
+            remaining_stock=f_stock,
+            departure_date=target_flight.get("departure_date"),
+            elasticity=target_flight.get("elasticity", -1.5),
+            reference_date=v_today,
+            strategy="demand_based"
+        )
+        h_item_sim_demand = h_item_sim_rule.copy()
+        h_item_sim_demand["current_price"] = h_pricing_demand["final_price"]
+        f_item_sim_demand = f_item_sim_rule.copy()
+        f_item_sim_demand["current_price"] = f_pricing_demand["final_price"]
+        f_item_sim_demand["velocity_ratio"] = f_pricing_demand.get("velocity_ratio") or 1.0
+        sim_demand = simulate_sales_scenario(
+            h_item_sim_demand, f_item_sim_demand, int(total_discount), lead_days, market_condition, reference_date=v_today
+        )
 
-        total_lead_days = max(h_lead, f_lead)
+        st.markdown("#### 📈 P/L 予測シミュレーション（実績＋将来予測）")
         
-        v_today_dt = pd.to_datetime(v_today)
-            
-        # 過去時系列用配列の初期化
-        past_x = []
-        past_revenue = []
-        past_revenue_h = []
-        past_revenue_f = []
-        past_potential_waste = []
+        # グラフ描画用シナリオの切り替え
+        selected_sim_scenario = st.radio(
+            "比較する予測シナリオを選択",
+            ["ルールベースのプライシング戦略", "需要予測ハイブリッド"],
+            horizontal=True,
+            key="sim_display_scenario"
+        )
+        is_hybrid = selected_sim_scenario == "需要予測ハイブリッド"
         
-        # 過去イベントのフィルタリング（タイムゾーン影響を防ぐためDate型で比較）
-        v_today_date = v_today_dt.date()
+        sim_res = sim_demand if is_hybrid else sim_rule
+        history_selected = sim_res["history"]
+        history_baseline = sim_rule["history"] # ベースラインの在庫減は共通(naive)
         
-        if not all_events.empty:
-            all_events["booked_date"] = pd.to_datetime(all_events["booked_at"]).dt.date
-            past_events_h = all_events[(all_events["inventory_id"] == target_hotel["id"]) & (all_events["booked_date"] <= v_today_date)]
-            past_events_f = all_events[(all_events["inventory_id"] == target_flight["id"]) & (all_events["booked_date"] <= v_today_date)]
-        else:
-            past_events_h = pd.DataFrame()
-            past_events_f = pd.DataFrame()
-        
-        # 初期状態
-        total_initial_cost = (target_hotel["total_stock"] * target_hotel["base_price"] * 0.9) + (target_flight["total_stock"] * target_flight["base_price"] * 0.9)
-        cum_rev = 0
-        cum_rev_h = 0
-        cum_rev_f = 0
-        current_h_stk = target_hotel["total_stock"]
-        current_f_stk = target_flight["total_stock"]
 
-        # 日次で集計ループ
-        # d は 出発日までの残り日数 (total_lead_days -> lead_days)
-        # つまり、古い日付から現在に向かって進むループにする必要がある
-        
-        # タイムゾーン等の影響を排除するため、イベント側の日付をDate型または文字列(YYYY-MM-DD)に前処理しておく
-        if not past_events_h.empty:
-            past_events_h = past_events_h.copy()
-            past_events_h["booked_date_str"] = pd.to_datetime(past_events_h["booked_at"]).dt.strftime("%Y-%m-%d")
-        if not past_events_f.empty:
-            past_events_f = past_events_f.copy()
-            past_events_f["booked_date_str"] = pd.to_datetime(past_events_f["booked_at"]).dt.strftime("%Y-%m-%d")
 
-        for d in range(total_lead_days, lead_days, -1):
-            current_date_dt = dep_dt - timedelta(days=d)
-            current_date_str = current_date_dt.strftime("%Y-%m-%d")
-            past_x.append(f"D-{d}")
-            
-            # ホテルの集計 (販売開始日以降のみ記録)
-            if d <= h_lead:
-                if not past_events_h.empty:
-                    day_sales_h = past_events_h[past_events_h["booked_date_str"] == current_date_str]
-                    sales_val_h = day_sales_h["sold_price"].sum()
-                    cum_rev += sales_val_h
-                    cum_rev_h += sales_val_h
-                    current_h_stk -= day_sales_h["quantity"].sum()
-                past_revenue_h.append(cum_rev_h)
-            else:
-                past_revenue_h.append(None)
-                
-            # フライトの集計 (販売開始日以降のみ記録)
-            if d <= f_lead:
-                if not past_events_f.empty:
-                    day_sales_f = past_events_f[past_events_f["booked_date_str"] == current_date_str]
-                    sales_val_f = day_sales_f["sold_price"].sum()
-                    cum_rev += sales_val_f
-                    cum_rev_f += sales_val_f
-                    current_f_stk -= day_sales_f["quantity"].sum()
-                past_revenue_f.append(cum_rev_f)
-            else:
-                past_revenue_f.append(None)
-                
-            # 全体合算と含み損
-            if d <= max(h_lead, f_lead):
-                past_revenue.append(cum_rev)
-                pw = (current_h_stk * target_hotel["base_price"] * 0.9) + (current_f_stk * target_flight["base_price"] * 0.9)
-                past_potential_waste.append(pw)
-            else:
-                past_revenue.append(None)
-                past_potential_waste.append(None)
+        # ─── 未来シナリオの抽出 ───
+        # ベースライン (シナリオ N: 共通)
+        scenario_n_revenue = [h["revenue_n"] for h in history_baseline]
+        scenario_n_revenue_h = [h["revenue_n_h"] for h in history_baseline]
+        scenario_n_revenue_f = [h["revenue_n_f"] for h in history_baseline]
+        scenario_n_h_stock = [h["h_stock_a"] for h in history_baseline]
+        scenario_n_f_stock = [h["f_stock_a"] for h in history_baseline]
+        
+        # 選択されたシナリオ (is_hybrid なら B=ハイブリッド, そうでなければ A=固定じゃないルールベース単品)
+        selected_revenue = [h["revenue_b"] if is_hybrid else h["revenue_a"] for h in history_selected]
+        selected_revenue_h = [h["revenue_b_h"] if is_hybrid else h["revenue_a_h"] for h in history_selected]
+        selected_revenue_f = [h["revenue_b_f"] if is_hybrid else h["revenue_a_f"] for h in history_selected]
+        selected_h_stock = [h["h_stock_b"] if is_hybrid else h["h_stock_a"] for h in history_selected]
+        selected_f_stock = [h["f_stock_b"] if is_hybrid else h["f_stock_a"] for h in history_selected]
 
         # ─── スライスされた履歴データと合体 ───
-        def get_last_valid(lst):
-            for item in reversed(lst):
-                if item is not None:
-                    return item
-            return 0
             
         offset_rev = get_last_valid(past_revenue)
         offset_rev_h = get_last_valid(past_revenue_h)
         offset_rev_f = get_last_valid(past_revenue_f)
 
-        scenario_a_revenue = [r + offset_rev for r in [h["revenue_a"] for h in history]]
-        scenario_b_revenue = [r + offset_rev for r in [h["revenue_b"] for h in history]]
-        scenario_n_revenue = [r + offset_rev for r in [h["revenue_n"] for h in history]]
+        scenario_n_revenue = [r + offset_rev for r in scenario_n_revenue]
+        scenario_n_revenue_h = [r + offset_rev_h for r in scenario_n_revenue_h]
+        scenario_n_revenue_f = [r + offset_rev_f for r in scenario_n_revenue_f]
         
-        scenario_a_rev_h = [r + offset_rev_h for r in [h["revenue_a_h"] for h in history]]
-        scenario_a_rev_f = [r + offset_rev_f for r in [h["revenue_a_f"] for h in history]]
-        scenario_b_rev_h = [r + offset_rev_h for r in [h["revenue_b_h"] for h in history]]
-        scenario_b_rev_f = [r + offset_rev_f for r in [h["revenue_b_f"] for h in history]]
-        scenario_n_rev_h = [r + offset_rev_h for r in [h["revenue_n_h"] for h in history]]
-        scenario_n_rev_f = [r + offset_rev_f for r in [h["revenue_n_f"] for h in history]]
+        selected_revenue = [r + offset_rev for r in selected_revenue]
+        selected_revenue_h = [r + offset_rev_h for r in selected_revenue_h]
+        selected_revenue_f = [r + offset_rev_f for r in selected_revenue_f]
         
         # 過去から未来へ線をはみ出さずシームレスに繋ぐためのブリッジ処理
-        # full_x の生成の際、重複を防ぐため調整
         if past_x:
             days_x_bridged = [past_x[-1]] + days_x
-            scenario_a_revenue = [get_last_valid(past_revenue)] + scenario_a_revenue
-            scenario_b_revenue = [get_last_valid(past_revenue)] + scenario_b_revenue
             scenario_n_revenue = [get_last_valid(past_revenue)] + scenario_n_revenue
+            scenario_n_revenue_h = [get_last_valid(past_revenue_h)] + scenario_n_revenue_h
+            scenario_n_revenue_f = [get_last_valid(past_revenue_f)] + scenario_n_revenue_f
             
-            scenario_a_rev_h = [get_last_valid(past_revenue_h)] + scenario_a_rev_h
-            scenario_a_rev_f = [get_last_valid(past_revenue_f)] + scenario_a_rev_f
-            scenario_b_rev_h = [get_last_valid(past_revenue_h)] + scenario_b_rev_h
-            scenario_b_rev_f = [get_last_valid(past_revenue_f)] + scenario_b_rev_f
-            scenario_n_rev_h = [get_last_valid(past_revenue_h)] + scenario_n_rev_h
-            scenario_n_rev_f = [get_last_valid(past_revenue_f)] + scenario_n_rev_f
+            selected_revenue = [get_last_valid(past_revenue)] + selected_revenue
+            selected_revenue_h = [get_last_valid(past_revenue_h)] + selected_revenue_h
+            selected_revenue_f = [get_last_valid(past_revenue_f)] + selected_revenue_f
             
-            potential_waste_a = [get_last_valid(past_potential_waste)] + potential_waste_a
-            potential_waste_b = [get_last_valid(past_potential_waste)] + potential_waste_b
+            # 在庫は絶対値として返ってきているため、過去ログの最終日と未来予測の初日をそのまま繋ぐ
+            # (ただし、描画上で線が途切れないように、過去の最終日=未来の0日目前を挟み込む)
+            scenario_n_h_stock = [get_last_valid(past_h_stock)] + scenario_n_h_stock
+            scenario_n_f_stock = [get_last_valid(past_f_stock)] + scenario_n_f_stock
+            selected_h_stock = [get_last_valid(past_h_stock)] + selected_h_stock
+            selected_f_stock = [get_last_valid(past_f_stock)] + selected_f_stock
         else:
             days_x_bridged = days_x
         
         full_x = past_x + days_x
-        full_rev_a = past_revenue + scenario_a_revenue[1:] if past_x else scenario_a_revenue
-        full_rev_b = past_revenue + scenario_b_revenue[1:] if past_x else scenario_b_revenue
+        full_rev_n = past_revenue + scenario_n_revenue[1:] if past_x else scenario_n_revenue
+        full_rev_sel = past_revenue + selected_revenue[1:] if past_x else selected_revenue
         
-        full_rev_a_h = past_revenue_h + scenario_a_rev_h
-        full_rev_a_f = past_revenue_f + scenario_a_rev_f
-        full_rev_b_h = past_revenue_h + scenario_b_rev_h
-        full_rev_b_f = past_revenue_f + scenario_b_rev_f
+        # 在庫のフル履歴も、ブリッジ済みの未来配列の[1:]以降を過去実績の末尾に結合する
+        full_h_stock_sel = past_h_stock + selected_h_stock[1:] if past_x else selected_h_stock
+        full_f_stock_sel = past_f_stock + selected_f_stock[1:] if past_x else selected_f_stock
+        full_h_stock_n = past_h_stock + scenario_n_h_stock[1:] if past_x else scenario_n_h_stock
+        full_f_stock_n = past_f_stock + scenario_n_f_stock[1:] if past_x else scenario_n_f_stock
 
-        full_waste_a = past_potential_waste + potential_waste_a
-        full_waste_b = past_potential_waste + potential_waste_b
-        
         # 総仕入原価ライン（固定）
         total_costs_line = [total_initial_cost] * len(full_x)
 
         # KPI用数値の抽出
-        final_revenue_a = full_rev_a[-1]
-        final_revenue_b = full_rev_b[-1]
-        final_waste_a = full_waste_a[-1]
-        final_waste_b = full_waste_b[-1]
+        final_revenue_n = full_rev_n[-1]
+        final_revenue_sel = full_rev_sel[-1]
         
-        # 利益指標の再計算 (最終着地利益 = 全体最終売上 - 全体総仕入原価 - 機会損失)
-        res_a = final_revenue_a - total_initial_cost
-        res_b = final_revenue_b - total_initial_cost - sim_res["details_b"].get("discount_loss", 0) - sim_res["details_b"].get("cannibal_loss", 0)
+        final_waste_n = (full_h_stock_n[-1] * h_item_sim_rule["cost"]) + (full_f_stock_n[-1] * f_item_sim_rule["cost"])
+        final_waste_sel = (full_h_stock_sel[-1] * h_item_sim_rule["cost"]) + (full_f_stock_sel[-1] * f_item_sim_rule["cost"])
+        
+        # 利益指標の再計算 (Cash Profit: 単純に最終売上 - 総仕入原価)
+        res_n = final_revenue_n - total_initial_cost
+        res_sel = final_revenue_sel - total_initial_cost
 
-        total_sold_b_pkg = sim_res["packages_sold"]
-        curr_b_h_stock = history[-1]["h_stock_b"] if history else h_stock
-        flight_stock_b = history[-1]["f_stock_b"] if history else f_stock
+        total_sold_b_pkg = sim_res["packages_sold"] if is_hybrid else 0
+        curr_b_h_stock = history_selected[-1]["h_stock_b" if is_hybrid else "h_stock_a"] if history_selected else h_stock
+        flight_stock_b = history_selected[-1]["f_stock_b" if is_hybrid else "f_stock_a"] if history_selected else f_stock
         
-        # 単品販売数の逆算
-        total_sold_a = int(target_hotel["remaining_stock"] - curr_b_h_stock)
-        total_sold_b_h_solo = max(0, int(target_hotel["remaining_stock"] - total_sold_b_pkg - curr_b_h_stock))
-        total_sold_b_f_solo = max(0, int(target_flight["remaining_stock"] - total_sold_b_pkg - flight_stock_b))
+        # シミュレーション期間中の販売数の逆算 (= シミュレーション開始時点の在庫 - 最終日の在庫)
+        curr_n_h_stock_fin = full_h_stock_n[-1]
+        curr_n_f_stock_fin = full_f_stock_n[-1]
         
-        # 単品シナリオの在庫残
-        # 簡易的に計算
-        curr_a_h_stock = target_hotel["remaining_stock"] - total_sold_a
-        flight_stock_a = target_flight["remaining_stock"] - total_sold_a
+        total_sold_n_h = int(h_stock - curr_n_h_stock_fin)
+        total_sold_n_f = int(f_stock - curr_n_f_stock_fin)
         
-        # 旧変数との互換性
+        total_sold_sel_h_solo = max(0, int(h_stock - total_sold_b_pkg - curr_b_h_stock))
+        total_sold_sel_f_solo = max(0, int(f_stock - total_sold_b_pkg - flight_stock_b))
+        
         vel_b_boosted = 2.5 * (1.0 + (total_discount / 10000.0))
-        h_cost = h_item_sim["cost"]
-        f_cost = f_item_sim["cost"]
+        h_cost = h_item_sim_rule["cost"]
+        f_cost = f_item_sim_rule["cost"]
 
         # --- 3. 視覚化 (Plotly) ---
         from plotly.subplots import make_subplots
+        
+        # 在庫数から割合(%)への変換処理
+        def to_pct(stock_list, total):
+            return [(s / total * 100) if s is not None else None for s in stock_list]
+            
+        past_h_stock_pct = to_pct(past_h_stock, target_hotel["total_stock"])
+        past_f_stock_pct = to_pct(past_f_stock, target_flight["total_stock"])
+        
+        scenario_n_h_stock_pct = to_pct(scenario_n_h_stock, target_hotel["total_stock"])
+        scenario_n_f_stock_pct = to_pct(scenario_n_f_stock, target_flight["total_stock"])
+        selected_h_stock_pct = to_pct(selected_h_stock, target_hotel["total_stock"])
+        selected_f_stock_pct = to_pct(selected_f_stock, target_flight["total_stock"])
+
         fig_sim = make_subplots(specs=[[{"secondary_y": True}]])
 
         # 総仕入原価（水平線）
@@ -1209,77 +1353,98 @@ if selected_tab == "🧪 Custom Simulator":
             line=dict(color='rgba(255,255,255,0.7)', width=2, dash='dash')
         ), secondary_y=False)
 
-        # ─── 過去実績部分 ───
+        # ─── 過去実績部分 (売上 - 左軸) ───
         if past_x:
-            # 実績 ホテル単体
-            fig_sim.add_trace(go.Scatter(
-                x=past_x, y=past_revenue_h, name="🏨 累積売上実績 (ホテル)",
-                line=dict(color='rgba(96, 165, 250, 0.6)', width=2) # blue-400
-            ), secondary_y=False)
-            # 実績 フライト単体
-            fig_sim.add_trace(go.Scatter(
-                x=past_x, y=past_revenue_f, name="✈️ 累積売上実績 (フライト)",
-                line=dict(color='rgba(192, 132, 252, 0.6)', width=2) # purple-400
-            ), secondary_y=False)
-            # 実績 全体合算
             fig_sim.add_trace(go.Scatter(
                 x=past_x, y=past_revenue, name="💰 累積売上実績 (全体合算)",
                 line=dict(color='#cbd5e1', width=3)
             ), secondary_y=False)
-            
-            # 実績 含み損
             fig_sim.add_trace(go.Scatter(
-                x=past_x, y=past_potential_waste, name="含み廃棄損リスク (実績)",
-                line=dict(color='#94a3b8', width=2, dash='dot')
+                x=past_x, y=past_revenue_h, name="💰 累積売上実績 (ホテル)",
+                line=dict(color='rgba(148, 163, 184, 0.7)', width=2, dash='dot')
+            ), secondary_y=False)
+            fig_sim.add_trace(go.Scatter(
+                x=past_x, y=past_revenue_f, name="💰 累積売上実績 (フライト)",
+                line=dict(color='rgba(148, 163, 184, 0.7)', width=2, dash='dot')
+            ), secondary_y=False)
+
+        # ─── 過去実績部分 (残在庫割合 - 右軸) ───
+        if past_x:
+            fig_sim.add_trace(go.Scatter(
+                x=past_x, y=past_h_stock_pct, name="🏨 残室割合実績 (ホテル)",
+                line=dict(color='rgba(96, 165, 250, 0.6)', width=2, dash='dot')
+            ), secondary_y=True)
+            fig_sim.add_trace(go.Scatter(
+                x=past_x, y=past_f_stock_pct, name="✈️ 残席割合実績 (フライト)",
+                line=dict(color='rgba(192, 132, 252, 0.6)', width=2, dash='dot')
             ), secondary_y=True)
 
-        # ─── 未来予測部分 (シナリオN: ナイーブ・現状推移) ───
+        # ─── 未来予測部分 (共通ベースライン: 現状維持・固定価格) ───
         fig_sim.add_trace(go.Scatter(
-            x=days_x_bridged, y=scenario_n_rev_h, name="🏨 予測売上 (現状推移・ホテル)",
-            line=dict(color='rgba(148, 163, 184, 0.4)', width=2, dash='dot') # slate-400
-        ), secondary_y=False)
-        fig_sim.add_trace(go.Scatter(
-            x=days_x_bridged, y=scenario_n_rev_f, name="✈️ 予測売上 (現状推移・フライト)",
-            line=dict(color='rgba(148, 163, 184, 0.4)', width=2, dash='dot') # slate-400
-        ), secondary_y=False)
-        fig_sim.add_trace(go.Scatter(
-            x=days_x_bridged, y=scenario_n_revenue, name="💰 予測売上 全体 (現状推移)",
+            x=days_x_bridged, y=scenario_n_revenue, name="💰 予測売上 全体 (現状維持: 固定価格)",
             line=dict(color='rgba(148, 163, 184, 0.6)', width=2, dash='dash')
         ), secondary_y=False)
-
-        # ─── 未来予測部分 (シナリオA: 単体維持) ───
         fig_sim.add_trace(go.Scatter(
-            x=days_x_bridged, y=scenario_a_rev_h, name="🏨 予測売上 (ホテル・シナリオA)",
-            line=dict(color='rgba(248, 113, 113, 0.4)', width=2, dash='dot') # red-400
+            x=days_x_bridged, y=scenario_n_revenue_h, name="💰 予測売上 ホテル (現状維持)",
+            line=dict(color='rgba(148, 163, 184, 0.4)', width=1, dash='dash')
         ), secondary_y=False)
         fig_sim.add_trace(go.Scatter(
-            x=days_x_bridged, y=scenario_a_rev_f, name="✈️ 予測売上 (フライト・シナリオA)",
-            line=dict(color='rgba(251, 146, 60, 0.4)', width=2, dash='dot') # orange-400
-        ), secondary_y=False)
-        fig_sim.add_trace(go.Scatter(
-            x=days_x_bridged, y=scenario_a_revenue, name="💰 予測売上 全体 (シナリオA)",
-            line=dict(color='#f87171', width=3, dash='dot')
+            x=days_x_bridged, y=scenario_n_revenue_f, name="💰 予測売上 フライト (現状維持)",
+            line=dict(color='rgba(148, 163, 184, 0.4)', width=1, dash='dash')
         ), secondary_y=False)
 
-        # ─── 未来予測部分 (シナリオB: ハイブリッド) ───
+        # ─── 未来予測部分 (残在庫 ベースライン) ───
         fig_sim.add_trace(go.Scatter(
-            x=days_x_bridged, y=scenario_b_rev_h, name="🏨 予測売上 (ホテル・シナリオB)",
-            line=dict(color='rgba(52, 211, 153, 0.6)', width=2) # emerald-400
+            x=days_x_bridged, y=scenario_n_h_stock_pct, name="🏨 予測残室割合 (現状維持)",
+            line=dict(color='rgba(148, 163, 184, 0.4)', width=1, dash='dot')
+        ), secondary_y=True)
+        fig_sim.add_trace(go.Scatter(
+            x=days_x_bridged, y=scenario_n_f_stock_pct, name="✈️ 予測残席割合 (現状維持)",
+            line=dict(color='rgba(148, 163, 184, 0.4)', width=1, dash='dot')
+        ), secondary_y=True)
+
+        # ─── 未来予測部分 (選択された戦略) ───
+        if is_hybrid:
+            line_color_rev = '#4ade80' # emerald-400
+            line_color_rev_sub = 'rgba(74, 222, 128, 0.5)'
+            line_color_h = 'rgba(52, 211, 153, 0.9)'
+            line_color_f = 'rgba(45, 212, 191, 0.9)'
+            name_rev = "💰 予測売上 全体 (需要予測ハイブリッド)"
+            name_rev_h = "💰 予測売上 ホテル (需要予測ハイブリッド)"
+            name_rev_f = "💰 予測売上 フライト (需要予測ハイブリッド)"
+            name_h = "🏨 予測残室割合 (需要予測ハイブリッド)"
+            name_f = "✈️ 予測残席割合 (需要予測ハイブリッド)"
+        else:
+            line_color_rev = '#f87171' # red-400
+            line_color_rev_sub = 'rgba(248, 113, 113, 0.5)'
+            line_color_h = 'rgba(248, 113, 113, 0.9)'
+            line_color_f = 'rgba(251, 146, 60, 0.9)'  # orange-400
+            name_rev = "💰 予測売上 全体 (ルールベース)"
+            name_rev_h = "💰 予測売上 ホテル (ルールベース)"
+            name_rev_f = "💰 予測売上 フライト (ルールベース)"
+            name_h = "🏨 予測残室割合 (ルールベース)"
+            name_f = "✈️ 予測残席割合 (ルールベース)"
+            
+        fig_sim.add_trace(go.Scatter(
+            x=days_x_bridged, y=selected_revenue, name=name_rev,
+            line=dict(color=line_color_rev, width=4)
         ), secondary_y=False)
         fig_sim.add_trace(go.Scatter(
-            x=days_x_bridged, y=scenario_b_rev_f, name="✈️ 予測売上 (フライト・シナリオB)",
-            line=dict(color='rgba(45, 212, 191, 0.6)', width=2) # teal-400
+            x=days_x_bridged, y=selected_revenue_h, name=name_rev_h,
+            line=dict(color=line_color_rev_sub, width=2, dash='solid')
         ), secondary_y=False)
         fig_sim.add_trace(go.Scatter(
-            x=days_x_bridged, y=scenario_b_revenue, name="💰 予測売上 全体 (シナリオB)",
-            line=dict(color='#4ade80', width=4)
+            x=days_x_bridged, y=selected_revenue_f, name=name_rev_f,
+            line=dict(color=line_color_rev_sub, width=2, dash='solid')
         ), secondary_y=False)
 
-        # 含み廃棄損 (未来予測 B)
         fig_sim.add_trace(go.Scatter(
-            x=days_x_bridged, y=potential_waste_b, name="予測含み廃棄損 (シナリオB)",
-            fill='tozeroy', fillcolor='rgba(74,222,128,0.1)',
-            line=dict(color='#4ade80', width=2, dash='dot')
+            x=days_x_bridged, y=selected_h_stock_pct, name=name_h,
+            line=dict(color=line_color_h, width=2, dash='solid')
+        ), secondary_y=True)
+        fig_sim.add_trace(go.Scatter(
+            x=days_x_bridged, y=selected_f_stock_pct, name=name_f,
+            line=dict(color=line_color_f, width=2, dash='solid')
         ), secondary_y=True)
 
         # 基準日（V-Line）
@@ -1321,7 +1486,6 @@ if selected_tab == "🧪 Custom Simulator":
         # レイアウト調整
         dark_layout(fig_sim, secondary_y=True)
         fig_sim.update_layout(
-            title="P/L 予測シミュレーション（実績＋将来予測）",
             xaxis=dict(
                 title="タイムライン（右端 = 期限・出発日 D-0）",
                 gridcolor="#1e293b",
@@ -1332,43 +1496,47 @@ if selected_tab == "🧪 Custom Simulator":
         )
         # 左右の軸個別設定
         max_y_candidates = [total_initial_cost]
-        if full_rev_a: max_y_candidates.append(max(full_rev_a))
-        if full_rev_b: max_y_candidates.append(max(full_rev_b))
-        if scenario_n_revenue: max_y_candidates.append(max(scenario_n_revenue))
+        if full_rev_n: max_y_candidates.append(max(full_rev_n))
+        if full_rev_sel: max_y_candidates.append(max(full_rev_sel))
         max_y = max(max_y_candidates) * 1.2
         
+        max_stock = max(target_hotel["total_stock"], target_flight["total_stock"]) * 1.05
+
         fig_sim.update_yaxes(title_text="累積金額 (円)", secondary_y=False, range=[0, max_y], gridcolor="#1e293b", tickformat=",d")
-        fig_sim.update_yaxes(title_text="含み廃棄損 (円)", secondary_y=True, range=[0, max_y], gridcolor="rgba(0,0,0,0)", showticklabels=False, tickformat=",d")
+        fig_sim.update_yaxes(title_text="残在庫割合 (%)", secondary_y=True, range=[0, 105], gridcolor="rgba(0,0,0,0)", tickformat=".1f")
 
         st.plotly_chart(fig_sim, use_container_width=True, key="sim_timeseries_chart")
         
         # --- 4. 決着 KPI ---
-        # 利益指標は上で再計算された res_a, res_b を利用するため不要な代入を削除
-        diff = res_b - res_a
+        diff = res_sel - res_n
         
         st.markdown("#### 🏁 予測結果・着地点比較（Day 0 廃棄損計上済み）")
         ck1, ck2, ck3 = st.columns(3)
         with ck1:
             st.markdown(f"""
-            <div style='background:rgba(248,113,113,0.1); border:1px solid #f87171; border-radius:12px; padding:15px; text-align:center;'>
-                <div style='font-size:0.8rem; color:#f87171;'>① 単品で粘る場合の着地点</div>
-                <div style='font-size:1.5rem; font-weight:800;'>¥{int(res_a):,}</div>
-                <div style='font-size:0.8rem; margin-top:10px;'>🏨 販売: {int(total_sold_a)}室 / 売れ残り: {int(curr_a_h_stock)}室</div>
-                <div style='font-size:0.8rem;'>✈️ 販売: {int(f_stock - flight_stock_a)}席 / 売れ残り: {int(flight_stock_a)}席</div>
+            <div style='background:rgba(148, 163, 184, 0.1); border:1px solid #94a3b8; border-radius:12px; padding:15px; text-align:center;'>
+                <div style='font-size:0.8rem; color:#94a3b8;'>① 現状維持 (固定価格・何もしない) の着地点</div>
+                <div style='font-size:1.5rem; font-weight:800; color:#e2e8f0;'>¥{int(res_n):,}</div>
+                <div style='font-size:0.8rem; margin-top:10px; color:#cbd5e1;'>🏨 販売: {int(total_sold_n_h)}室 / 売れ残り: {int(curr_n_h_stock_fin)}室</div>
+                <div style='font-size:0.8rem; color:#cbd5e1;'>✈️ 販売: {int(total_sold_n_f)}席 / 売れ残り: {int(curr_n_f_stock_fin)}席</div>
             </div>
             """, unsafe_allow_html=True)
         with ck2:
-            h_sold_b_total = int(total_sold_b_pkg + total_sold_b_h_solo)
-            f_sold_b_total = int(total_sold_b_pkg + total_sold_b_f_solo)
-            h_unsold_b = int(curr_b_h_stock)
-            f_unsold_b = int(flight_stock_b)
+            h_sold_sel_total = int(total_sold_b_pkg + total_sold_sel_h_solo)
+            f_sold_sel_total = int(total_sold_b_pkg + total_sold_sel_f_solo)
+            h_unsold_sel = int(curr_b_h_stock)
+            f_unsold_sel = int(flight_stock_b)
+            
+            box_bg = "rgba(74,222,128,0.1)" if is_hybrid else "rgba(248,113,113,0.1)"
+            box_bc = "#4ade80" if is_hybrid else "#f87171"
+            title = "② 需要予測ハイブリッドの理想着地点" if is_hybrid else "② ルールベース・プライシングの着地点"
             st.markdown(f"""
-            <div style='background:rgba(74,222,128,0.1); border:1px solid #4ade80; border-radius:12px; padding:15px; text-align:center;'>
-                <div style='font-size:0.8rem; color:#4ade80;'>② ハイブリッド化の理想着地点</div>
-                <div style='font-size:1.5rem; font-weight:800;'>¥{int(res_b):,}</div>
-                <div style='font-size:0.75rem; color:#4ade80; margin-top:8px;'>📦 パッケージ: {int(total_sold_b_pkg)}組</div>
-                <div style='font-size:0.8rem; margin-top:4px;'>🏨 販売: {h_sold_b_total}室（単品切替{int(total_sold_b_h_solo)}室）/ 売れ残り: {h_unsold_b}室</div>
-                <div style='font-size:0.8rem;'>✈️ 販売: {f_sold_b_total}席（単品切替{int(total_sold_b_f_solo)}席）/ 売れ残り: {f_unsold_b}席</div>
+            <div style='background:{box_bg}; border:1px solid {box_bc}; border-radius:12px; padding:15px; text-align:center;'>
+                <div style='font-size:0.8rem; color:{box_bc};'>{title}</div>
+                <div style='font-size:1.5rem; font-weight:800;'>¥{int(res_sel):,}</div>
+                <div style='font-size:0.75rem; color:{box_bc}; margin-top:8px;'>📦 パッケージ: {int(total_sold_b_pkg)}組</div>
+                <div style='font-size:0.8rem; margin-top:4px;'>🏨 販売: {h_sold_sel_total}室（単品切替{int(total_sold_sel_h_solo)}室）/ 売れ残り: {h_unsold_sel}室</div>
+                <div style='font-size:0.8rem;'>✈️ 販売: {f_sold_sel_total}席（単品切替{int(total_sold_sel_f_solo)}席）/ 売れ残り: {f_unsold_sel}席</div>
             </div>
             """, unsafe_allow_html=True)
         with ck3:
@@ -1384,9 +1552,9 @@ if selected_tab == "🧪 Custom Simulator":
         <div style='background:rgba(30,27,75,0.4); border:1px solid rgba(167,139,250,0.4); border-radius:10px; padding:15px; margin-top:20px; margin-bottom:20px;'>
             <h5 style='margin-top:0;'>💡 AI 戦略アドバイス</h5>
             <p style='font-size:0.9rem; color:#e2e8f0;'>
-                シナリオAでは <b>{int(curr_a_h_stock)}個</b> の売れ残りが発生し、仕入原価 <b>¥{int(curr_a_h_stock * h_cost):,}</b> が丸損となる予測です。<br>
-                パッケージ化（シナリオB）では販売速度を <b>{vel_b_boosted:.1f}件/日</b> まで引き上げることで、売れ残り数を <b>{int(curr_b_h_stock)}個</b> まで圧縮します。
-                フライトのカニバリゼーションを考慮しても、この在庫リスク回避が <b>¥{int(diff):,}</b> の利益貢献につながります。
+                現状維持(単品販売)のままではホテルに <b>{int(curr_n_h_stock_fin)}室</b> の売れ残りが発生し、仕入原価 <b>¥{int(curr_n_h_stock_fin * h_cost):,}</b> 分が丸損となる予測です。<br>
+                戦略適用後には販売速度を <b>{vel_b_boosted:.1f}件/日</b> まで引き上げることで、売れ残り数を <b>{int(h_unsold_sel)}室</b> まで圧縮し、機会損失を最小化します。
+                結果としてトータルの利益着地点が <b>¥{int(diff):,}</b> 改善される見込みです。
             </p>
         </div>
         """, unsafe_allow_html=True)
@@ -1403,48 +1571,52 @@ if selected_tab == "🧪 Custom Simulator":
             st.markdown("シナリオA（単品維持）とシナリオB（ハイブリッド戦略）の収支構造の違いを比較します。")
             
             # P/L詳細の表示も全体の最終売上等を反映する
-            det_a_rev = final_revenue_a
-            det_b_rev = final_revenue_b
+            det_n_rev = final_revenue_n
+            det_sel_rev = final_revenue_sel
             
             # 各シナリオの実質的な原価（売れた分の原価＋廃棄になった分の原価）は「総仕入原価と同じ」
             pl_data = [
-                {"項目": "① 累計総売上額", "シナリオA": f"¥{int(det_a_rev):,}", "シナリオB": f"¥{int(det_b_rev):,}", "差分 (B - A)": f"¥{int(det_b_rev - det_a_rev):,}"},
-                {"項目": "② 総仕入原価 (固定)", "シナリオA": f"-¥{int(total_initial_cost):,}", "シナリオB": f"-¥{int(total_initial_cost):,}", "差分 (B - A)": "¥0"},
-                {"項目": "③ 内、廃棄損 (売れ残り分)", "シナリオA": f"(-¥{int(final_waste_a):,})", "シナリオB": f"(-¥{int(final_waste_b):,})", "差分 (B - A)": f"¥{int(final_waste_a - final_waste_b):,} (ロス回避)"},
-                {"項目": "④ 各種割引・逸失利益等", "シナリオA": "¥0", "シナリオB": f"-¥{int(sim_res['details_b'].get('discount_loss', 0) + sim_res['details_b'].get('cannibal_loss', 0)):,}", "差分 (B - A)": f"-¥{int(sim_res['details_b'].get('discount_loss', 0) + sim_res['details_b'].get('cannibal_loss', 0)):,}"},
-                {"項目": "⭐ 最終着地利益", "シナリオA": f"¥{int(res_a):,}", "シナリオB": f"¥{int(res_b):,}", "差分 (B - A)": f"¥{int(res_b - res_a):,}"},
+                {"項目": "① 累計総売上額", "現状維持": f"¥{int(det_n_rev):,}", "選択戦略": f"¥{int(det_sel_rev):,}", "差分 (戦略 - 現状)": f"¥{int(det_sel_rev - det_n_rev):,}"},
+                {"項目": "② 総仕入原価 (固定)", "現状維持": f"-¥{int(total_initial_cost):,}", "選択戦略": f"-¥{int(total_initial_cost):,}", "差分 (戦略 - 現状)": "¥0"},
+                {"項目": "③ 内、廃棄損 (売れ残り分)", "現状維持": f"(-¥{int(final_waste_n):,})", "選択戦略": f"(-¥{int(final_waste_sel):,})", "差分 (戦略 - 現状)": f"¥{int(final_waste_n - final_waste_sel):,} (ロス回避)"},
+                {"項目": "⭐ 最終着地利益 (① + ②)", "現状維持": f"¥{int(res_n):,}", "選択戦略": f"¥{int(res_sel):,}", "差分 (戦略 - 現状)": f"¥{int(diff):,}"},
+                {"項目": "※ 参考: パッケージ割引還元総額", "現状維持": "¥0", "選択戦略": f"¥{int(sim_res['details_b'].get('discount_loss', 0)):,}", "差分 (戦略 - 現状)": f"¥{int(sim_res['details_b'].get('discount_loss', 0)):,}"},
             ]
             st.dataframe(pd.DataFrame(pl_data), use_container_width=True, hide_index=True)
 
         with tab_breakdown:
-            st.markdown("**シナリオB（ハイブリッド戦略稼働時）**の、商材ごとの販売実績とロスの内訳です。")
+            title_bd = "**シナリオB（需要予測ハイブリッド戦略）**" if is_hybrid else "**シナリオA（ルールベース・プライシング戦略）**"
+            st.markdown(f"{title_bd}の、商材ごとの販売実績とロスの内訳です。")
+            
+            det_sel = sim_res["details_b"] if is_hybrid else sim_res["details_a"]
+            
             bd_data = [
                 {
                     "商材": "🏨 " + target_hotel["name"], 
-                    "合計販売数": f"{int(total_sold_b_pkg + total_sold_b_h_solo)}室",
+                    "合計販売数": f"{h_sold_sel_total}室",
                     "うちPKG販売": f"{int(total_sold_b_pkg)}セット",
-                    "売れ残り数": f"{int(curr_b_h_stock)}室",
-                    "売上貢献": f"¥{det_b['revenue_pkg'] // 2 + det_b['revenue_h_solo']:,} (推計)", 
-                    "廃棄損(コスト)": f"¥{det_b['waste_h']:,}"
+                    "売れ残り数": f"{h_unsold_sel}室",
+                    "売上貢献": f"¥{det_sel.get('revenue_pkg', 0) // 2 + det_sel.get('revenue_h_solo', det_sel.get('revenue_h', 0)):,} (推計)", 
+                    "廃棄損(コスト)": f"¥{det_sel.get('waste_h', 0):,}"
                 },
                 {
                     "商材": "✈️ " + target_flight["name"], 
-                    "合計販売数": f"{int(total_sold_b_pkg + total_sold_b_f_solo)}席",
+                    "合計販売数": f"{f_sold_sel_total}席",
                     "うちPKG販売": f"{int(total_sold_b_pkg)}セット",
-                    "売れ残り数": f"{int(flight_stock_b)}席",
-                    "売上貢献": f"¥{det_b['revenue_pkg'] // 2 + det_b['revenue_f_solo']:,} (推計)", 
-                    "廃棄損(コスト)": f"¥{det_b['waste_f']:,}"
+                    "売れ残り数": f"{f_unsold_sel}席",
+                    "売上貢献": f"¥{det_sel.get('revenue_pkg', 0) // 2 + det_sel.get('revenue_f_solo', det_sel.get('revenue_f', 0)):,} (推計)", 
+                    "廃棄損(コスト)": f"¥{det_sel.get('waste_f', 0):,}"
                 }
             ]
             st.dataframe(pd.DataFrame(bd_data), use_container_width=True, hide_index=True)
-            if det_b['cannibal_loss'] > 0:
-                st.caption(f"※ フライトはパッケージに取られたことによる機会損失（動的カニバリゼーションロス）額 **¥{det_b['cannibal_loss']:,}** も計算に加味されています。")
+            if is_hybrid and det_sel.get('cannibal_loss', 0) > 0:
+                st.caption(f"※ フライトはパッケージに取られたことによる機会損失（動的カニバリゼーションロス）額 **¥{det_sel['cannibal_loss']:,}** も計算に加味されています。")
 
         with tab_params:
             st.markdown("本シミュレーションを決定づけている裏側の計算パラメータ（カンペ）です。")
             param_data = [
-                {"パラメータ名": "ホテルの価格弾力性", "現在値": f"{h_item_sim['elasticity']}", "説明": "価格変更に対する需要の敏感さ（負の数値が小さいほど値上げに強い）"},
-                {"パラメータ名": "フライトの価格弾力性", "現在値": f"{f_item_sim['elasticity']}", "説明": "同上"},
+                {"パラメータ名": "ホテルの価格弾力性", "現在値": f"{h_item_sim_rule['elasticity']}", "説明": "価格変更に対する需要の敏感さ（負の数値が小さいほど値上げに強い）"},
+                {"パラメータ名": "フライトの価格弾力性", "現在値": f"{f_item_sim_rule['elasticity']}", "説明": "同上"},
                 {"パラメータ名": "ホテル基本販売ペース", "現在値": f"{par['vel_a_base']:.2f} 件/日", "説明": "現在の時価と同条件で単品販売した場合の、直近の1日あたり販売速度"},
                 {"パラメータ名": "PKG化による加速ペース", "現在値": f"{par['vel_b_boosted']:.2f} 件/日", "説明": "パッケージ化と割引によってブーストされた販売速度。この速度で売れ残りを消化します"},
                 {"パラメータ名": "動的カニバリゼーション係数", "現在値": f"{par['dynamic_cannibal_rate'] * 100:.1f} %", "説明": "フライトがPKGに使われたことで「単品のフライト需要」が食い潰される損失割合"}
