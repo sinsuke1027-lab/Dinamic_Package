@@ -261,16 +261,28 @@ def apply_custom_css():
         background: {Theme.primary_hover} !important;
     }}
     /* expander */
+    [data-testid="stExpander"], details {{
+        background-color: #ffffff !important;
+        border: 1px solid {Theme.border_light} !important;
+        border-radius: 8px !important;
+    }}
     details summary {{
+        background-color: #ffffff !important;
         color: {Theme.text_main} !important;
         font-weight: 600 !important;
+        padding: 10px !important;
+        border-radius: 8px !important;
     }}
     details[open] summary {{
         color: {Theme.primary_hover} !important;
     }}
-    /* dataframe */
-    .stDataFrame, .stDataFrame * {{
-        color: {Theme.chart_text} !important;
+    
+    /* dataframe and data_editor */
+    [data-testid="stDataFrame"], [data-testid="stDataEditor"], .stDataFrame, .stDataEditor {{
+        background-color: #ffffff !important;
+    }}
+    [data-testid="stDataFrame"] *, [data-testid="stDataEditor"] * {{
+        color: #000000 !important;
     }}
     /* アプリ全体のメイン背景色を強制的に白/ライト系にする */
     .stApp, .stApp > header, .main {{
