@@ -171,6 +171,7 @@ def init_db():
             total_stock       INTEGER NOT NULL,
             remaining_stock   INTEGER NOT NULL,
             base_price        INTEGER NOT NULL,
+            cost              INTEGER NOT NULL,
             departure_date    TEXT,
             procurement_date  TEXT,
             elasticity        REAL NOT NULL DEFAULT -1.5
@@ -226,12 +227,17 @@ def init_db():
             sold_so_far = int(pm["total_stock"] * pm["sell_thru_ratio"] * elapsed_ratio)
             remaining = max(0, pm["total_stock"] - sold_so_far)
 
+            # 原価(Cost)を元値(base_price)の70〜80%で設定する
+            cost_rate = random.uniform(0.70, 0.80)
+            cost = int(pm["base_price"] * cost_rate)
+
             inv_records.append((
                 pm["type"],
                 pm["name_tmpl"],
                 pm["total_stock"],
                 remaining,
                 pm["base_price"],
+                cost,
                 dep_str,
                 proc_str,
                 pm.get("elasticity", -1.5)
@@ -239,8 +245,8 @@ def init_db():
 
     cursor.executemany('''
         INSERT INTO inventory
-            (item_type, name, total_stock, remaining_stock, base_price, departure_date, procurement_date, elasticity)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            (item_type, name, total_stock, remaining_stock, base_price, cost, departure_date, procurement_date, elasticity)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     ''', inv_records)
     conn.commit()
     print(f"✅ inventory テーブルに {len(inv_records)} 件の在庫レコードを生成しました。")

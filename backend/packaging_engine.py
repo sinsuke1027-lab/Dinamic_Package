@@ -18,10 +18,10 @@ def get_conn():
     return conn
 
 # 出発直前の資産減衰計算用（pricing_engineからインポート）
-def _get_decay_factor(lead_days: int, total_lead_days: int) -> float:
+def _get_decay_factor(lead_days: int, total_lead_days: int, k: float = 20.0, p: float = 0.12) -> float:
     try:
         from pricing_engine import calculate_inventory_decay_factor
-        return calculate_inventory_decay_factor(lead_days, total_lead_days)
+        return calculate_inventory_decay_factor(lead_days, total_lead_days, k=k, p=p)
     except ImportError:
         return 1.0 # 予備
 
@@ -289,6 +289,7 @@ def simulate_sales_scenario(
     discount: int, 
     lead_days: int, 
     market_condition: str = "base",
+    config: Optional[dict] = None,
     reference_date: Optional[date] = None
 ) -> dict:
     """
@@ -296,6 +297,10 @@ def simulate_sales_scenario(
     単品維持(Scenario A) vs ハイブリッド(Scenario B) の収益差分を計算する。
     app.py（シミュレーター）とロジックを100%統一。
     """
+    conf = config or {}
+    k_val = conf.get("decay_k", 20.0)
+    p_val = conf.get("decay_p", 0.12)
+
     # 1. 基礎データ (AI時価基準)
     h_unit_profit_standalone = h_item["current_price"] - h_item["cost"]
     f_unit_profit_standalone = f_item["current_price"] - f_item["cost"]
@@ -439,7 +444,7 @@ def simulate_sales_scenario(
             "revenue_b_f": int(revenue_b_pkg_f_estimated + revenue_b_f_solo),
             "potential_waste_a": int(potential_waste_a),
             "potential_waste_b": int(potential_waste_b),
-            "decay_factor": _get_decay_factor(t, lead_days)
+            "decay_factor": _get_decay_factor(t, lead_days, k=k_val, p=p_val)
         })
 
     # 30日目の廃棄損 (Day 0)
@@ -495,9 +500,54 @@ def simulate_sales_scenario(
         }
     }
 
+def find_optimal_bundle_discount(hotel: dict, flight: dict, scenario: str = "base", config: Optional[dict] = None, reference_date: Optional[date] = None, steps: int = None) -> tuple[int, dict]:
+    """
+    ホテルとフライトのペアに対し、最も利益(gain)が大きくなる最適な割引額を探索する。
+    """
+    if steps is None:
+        try:
+            from constants import AUTO_DISCOUNT_GRID_STEPS
+            steps = AUTO_DISCOUNT_GRID_STEPS
+        except ImportError:
+            steps = 5
+            
+    try:
+        from constants import AUTO_DISCOUNT_MIN_RATE, AUTO_DISCOUNT_MAX_RATE
+        min_rate = AUTO_DISCOUNT_MIN_RATE
+        max_rate = AUTO_DISCOUNT_MAX_RATE
+    except ImportError:
+        min_rate = 0.02
+        max_rate = 0.20
 
+    combined_price = hotel["current_price"] + flight["current_price"]
+    
+    best_gain = -999_999_999
+    best_discount_amt = 0
+    best_sim_result = None
+    
+    # min_rate から max_rate までを steps 分割してシミュレーション
+    for i in range(steps):
+        # 0段階なら min_rate, steps-1 段階なら max_rate になるように比率を計算
+        if steps > 1:
+            current_rate = min_rate + (max_rate - min_rate) * (i / (steps - 1))
+        else:
+            current_rate = min_rate
+            
+        discount_amt = int(combined_price * current_rate)
+        
+        sim = simulate_sales_scenario(
+            hotel, flight, discount_amt, hotel["lead_days"], scenario, config=config, reference_date=reference_date
+        )
+        
+        # 利益が全く出ないケースなどは棄却したいが、ここでは最悪でもマシなものを選ぶ
+        if sim["gain"] > best_gain:
+            best_gain = sim["gain"]
+            best_discount_amt = discount_amt
+            best_sim_result = sim
+            
+    return best_discount_amt, best_sim_result
 
-def calculate_optimal_strategy(scenario: str = "base", inventory_ids: Optional[list[int]] = None, current_prices: Optional[dict[int, int]] = None, reference_date: Optional[date] = None) -> dict:
+def calculate_optimal_strategy(scenario: str = "base", config: Optional[dict] = None, inventory_ids: Optional[list[int]] = None, current_prices: Optional[dict[int, int]] = None, reference_date: Optional[date] = None) -> dict:
     """
     全商品に対して「単品維持」vs「パッケージ化」の最適販売戦略を計算する。
     Prescriptive Analytics の中核ロジック。
@@ -533,9 +583,9 @@ def calculate_optimal_strategy(scenario: str = "base", inventory_ids: Optional[l
         FROM inventory
         {where_clause}
     """, params).fetchall()
-    conn.close()
 
     if not rows:
+        conn.close()
         return {
             "recommendations": [],
             "total_standalone_profit": 0,
@@ -593,26 +643,23 @@ def calculate_optimal_strategy(scenario: str = "base", inventory_ids: Optional[l
     flights = [i for i in items if i["item_type"] == "flight"]
 
     # ---------- Step 2: 最良の組み合わせを探索 (O(n×m)) ----------
-    # ホテルの「パッケージ最適割引率」を 8% と仮定して全フライトを試算
-    # (シミュレーターの動的ループを用いるため、以前の簡易的な組合せロジックを置換)
+    # ホテルに対し、最も利益が大きくなるフライトおよびその割引額を探索
     hotel_best_bundle = {}
     for h in hotels:
         best_gain = -999_999_999
         best_result = None
-        # 提案割引額 (サマリ用): (合計価格の8% または 固定8000円など)
-        proposed_discount = int((h["current_price"] + (h["current_price"]*0.5)) * 0.08) # 目安
 
         for f in flights:
             if f["departure_date"] != h["departure_date"]:
                 continue
 
-            # シミュレーション実行 (不整合解消の核)
-            sim = simulate_sales_scenario(h, f, proposed_discount, h["lead_days"], scenario, reference_date=reference_date)
+            # シミュレーション実行 (複数パターンの割引額を試してベストを選ぶ)
+            best_discount_amt, sim = find_optimal_bundle_discount(h, f, scenario, config=config, reference_date=reference_date)
             gain = sim["gain"]
 
             if gain > best_gain:
                 best_gain = gain
-                bundle_price = int(h["current_price"] + f["current_price"] - proposed_discount)
+                bundle_price = int(h["current_price"] + f["current_price"] - best_discount_amt)
                 best_result = {
                     "flight": f,
                     "gain": gain,
@@ -701,6 +748,23 @@ def calculate_optimal_strategy(scenario: str = "base", inventory_ids: Optional[l
             })
 
     # ---------- Step 4: 合計利益の算出 (厳密なシミュレーションベース) ----------
+    # 最終的な着地利益として、過去の実績売上と全在庫の仕入原価を加味する
+    total_past_revenue = 0
+    total_full_cost = 0
+    
+    # 基準日までの全過去実績を取得
+    now_str = now.isoformat()
+    if reference_date:
+        now_str = datetime.combine(reference_date, datetime.max.time()).replace(tzinfo=timezone.utc).isoformat()
+        
+    past_sales = conn.execute("SELECT SUM(sold_price) as qty FROM booking_events WHERE booked_at <= ?", (now_str,)).fetchone()
+    if past_sales and past_sales["qty"]:
+        total_past_revenue = int(past_sales["qty"])
+
+    for it in items:
+        total_full_cost += it["total_stock"] * it["cost"]
+
+    # 未来分の利益(粗利・廃棄考慮済みの売上)の積み上げ
     total_standalone = 0
     total_optimized  = 0
     processed_h = set()
@@ -714,20 +778,55 @@ def calculate_optimal_strategy(scenario: str = "base", inventory_ids: Optional[l
         processed_h.add(h_id)
         processed_f.add(best["flight"]["id"])
 
-    # 2. その他単品
+    # 2. その他単品 (フライトやバンドルに選ばれなかったホテル)
     for it in items:
         if it["id"] not in processed_h and it["id"] not in processed_f:
-            # 単品シミュレーションを実行して利益を計上
-            dummy_f = {"id": -1, "remaining_stock": 0, "cost": 0, "current_price": 0, "velocity_ratio": 0, "base_price": 0}
-            sim_a = simulate_sales_scenario(it, dummy_f, 0, it["lead_days"], scenario)
-            total_standalone += sim_a["profit_a"]
-            total_optimized  += sim_a["profit_a"]
+            # 単品シミュレーションを実行して未来の利益を計上
+            dummy_f = {"id": -1, "remaining_stock": 0, "cost": 0, "current_price": 0, "velocity_ratio": 1.0, "base_price": 0, "total_stock": 0, "name": "dummy"}
+            
+            # packaging_engine内のsimulateは 内部で cost差し引き＋廃棄損 を行っているが、
+            # 上記で total_full_cost を引く方針とするため、ここでは「純粋な売上」だけを計上するように調整する必要がある。
+            # しかし sim_data["profit_a/b"] にはすでにcost引きが入っているため、二重引きを防ぐために
+            # simulate_sales_scenario の戻り値である revenue を使う。
+            
+            sim_a = simulate_sales_scenario(it, dummy_f, 0, it["lead_days"], scenario, config=config, reference_date=reference_date)
+            
+            total_standalone += sim_a["details_a"]["revenue"]
+            total_optimized  += sim_a["details_a"]["revenue"]
+            
+    # バンドル組のrevenueへの切り替え再集計
+    for h_id in bundled_hotel_ids:
+        best = hotel_best_bundle[h_id]
+        # future revenue だけを抽出する
+        total_standalone += best["sim_data"]["details_a"]["revenue"] - best["sim_data"]["profit_a"] # 一旦相殺してrevenueだけに
+        total_optimized  += best["sim_data"]["details_b"]["revenue"] - best["sim_data"]["profit_b"]
 
-    ai_impact = total_optimized - total_standalone
+    # 再度、正しいrevenueで積算し直す
+    total_sa_future_rev = 0
+    total_opt_future_rev = 0
+    
+    for h_id in bundled_hotel_ids:
+        best = hotel_best_bundle[h_id]
+        total_sa_future_rev += best["sim_data"]["details_a"]["revenue"]
+        total_opt_future_rev += best["sim_data"]["details_b"]["revenue"]
+        
+    for it in items:
+        if it["id"] not in processed_h and it["id"] not in processed_f:
+            dummy_f = {"id": -1, "remaining_stock": 0, "cost": 0, "current_price": 0, "velocity_ratio": 1.0, "base_price": 0, "total_stock": 0, "name": "dummy"}
+            sim_a = simulate_sales_scenario(it, dummy_f, 0, it["lead_days"], scenario, reference_date=reference_date)
+            total_sa_future_rev += sim_a["details_a"]["revenue"]
+            total_opt_future_rev += sim_a["details_a"]["revenue"]
 
+    # 最終的な全体着地点（過去＋未来売上 － 全成本）
+    final_standalone_profit = total_past_revenue + total_sa_future_rev - total_full_cost
+    final_optimized_profit  = total_past_revenue + total_opt_future_rev - total_full_cost
+    
+    ai_impact = final_optimized_profit - final_standalone_profit
+
+    conn.close()
     return {
         "recommendations": recommendations,
-        "total_standalone_profit": int(total_standalone),
-        "total_optimized_profit":  int(total_optimized),
+        "total_standalone_profit": int(final_standalone_profit),
+        "total_optimized_profit":  int(final_optimized_profit),
         "ai_impact":               int(ai_impact),
     }

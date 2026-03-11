@@ -19,6 +19,15 @@ BUNDLE_THRESHOLD      = 5000   # バンドル推奨の最低利益改善基準�
 BUNDLE_DISCOUNT_RATE  = 0.08   # パッケージ割引率（合計額の8%）
 CANNIBALIZATION_RATE  = 0.15   # カニバリゼーション控除率の基本値
 
+# キャンセル・変動率
+BASE_CANCELLATION_RATE = 0.05
+PRICE_ELASTICITY = -1.5
+
+# 自動割引探索パラメータ
+AUTO_DISCOUNT_MIN_RATE = 0.02
+AUTO_DISCOUNT_MAX_RATE = 0.20
+AUTO_DISCOUNT_GRID_STEPS = 5
+
 # 自動価格ブレーキ関連 (pricing_engine)
 BRAKE_THRESHOLD       = 1.5    # 販売速度が期待値の1.5倍を超えたら発動
 BRAKE_STRENGTH_PCT    = 0.05   # 5% の価格ブレーキ

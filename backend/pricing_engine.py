@@ -26,6 +26,8 @@ Explainable Pricing Engine（説明可能な価格設定エンジン）。
 
 import sqlite3
 import math
+import pandas as pd
+import numpy as np
 from datetime import date, datetime, timezone
 from typing import Optional
 
@@ -41,33 +43,40 @@ DATABASE = 'inventory.db'
 # 在庫要因の計算
 # ─────────────────────────────────────────
 
-def calc_inventory_adjustment(base_price: int, inv_ratio: float) -> tuple[int, str]:
+def calc_inventory_adjustment(base_price: int, inv_ratio: float, config: Optional[dict] = None) -> tuple[int, str]:
     """
     残在庫率に基づく価格調整額を計算する。
 
     Args:
         base_price: 原価（円）
         inv_ratio:  残在庫率（0.0〜1.0）
+        config:     AI Command Centerから渡される動的パラメータ
 
     Returns:
         (調整額（円）, 理由テキスト)
     """
+    conf = config or {}
+    premium_pct = conf.get('rule_inv_premium_pct', 30) / 100.0
+    high_pct = conf.get('rule_inv_high_pct', 10) / 100.0
+    discount_pct = conf.get('rule_inv_discount_pct', -15) / 100.0
+
     if inv_ratio < 0.20:
         # 残20%未満: 希少プレミアム
-        adj = round(base_price * 0.30)
-        reason = f"在庫残{int(inv_ratio*100)}%のため希少プレミアム(+¥{adj:,})"
+        adj = round(base_price * premium_pct)
+        reason = f"在庫残{int(inv_ratio*100)}%のため希少プレミアム({'%s' % ('+' if adj>0 else '')}¥{adj:,})"
     elif inv_ratio < 0.50:
         # 残20〜50%: 軽微な需要圧
-        adj = round(base_price * 0.10)
-        reason = f"在庫残{int(inv_ratio*100)}%のため需要増加調整(+¥{adj:,})"
+        adj = round(base_price * high_pct)
+        reason = f"在庫残{int(inv_ratio*100)}%のため需要増加調整({'%s' % ('+' if adj>0 else '')}¥{adj:,})"
     elif inv_ratio < 0.70:
         # 残50〜70%: 標準（調整なし）
         adj = 0
         reason = f"在庫残{int(inv_ratio*100)}%のため標準価格（調整なし）"
     else:
         # 残70%以上: 余裕割引
-        adj = round(base_price * -0.15)
-        reason = f"在庫残{int(inv_ratio*100)}%のため余裕割引(-¥{abs(adj):,})"
+        adj = round(base_price * discount_pct)
+        sign = "-" if adj < 0 else ("+" if adj > 0 else "")
+        reason = f"在庫残{int(inv_ratio*100)}%のため余裕割引({sign}¥{abs(adj):,})"
 
     return adj, reason
 
@@ -76,36 +85,44 @@ def calc_inventory_adjustment(base_price: int, inv_ratio: float) -> tuple[int, s
 # リードタイム要因の計算
 # ─────────────────────────────────────────
 
-def calc_time_adjustment(base_price: int, lead_days: int) -> tuple[int, str]:
+def calc_time_adjustment(base_price: int, lead_days: int, config: Optional[dict] = None) -> tuple[int, str]:
     """
     出発日までの残り日数（リードタイム）に基づく価格調整額を計算する。
 
     Args:
         base_price: 原価（円）
         lead_days:  出発日まで何日か（負 = 既に出発済み）
+        config:     AI Command Centerから渡される動的パラメータ
 
     Returns:
         (調整額（円）, 理由テキスト)
     """
+    conf = config or {}
+    last_min_pct = conf.get('rule_time_last_min_pct', -15) / 100.0
+    peak_pct = conf.get('rule_time_peak_pct', 10) / 100.0
+    early_pct = conf.get('rule_time_early_pct', -10) / 100.0
+
     if lead_days < 0:
         # 出発済み → 価格無効
         return 0, "出発済み（価格計算対象外）"
     elif lead_days <= 7:
         # 0〜7日: 直前割引（最終在庫の取りこぼし防止）
-        adj = round(base_price * -0.15)
-        reason = f"出発まで{lead_days}日のため直前割引(-¥{abs(adj):,})"
+        adj = round(base_price * last_min_pct)
+        sign = "-" if adj < 0 else ("+" if adj > 0 else "")
+        reason = f"出発まで{lead_days}日のため直前割引({sign}¥{abs(adj):,})"
     elif lead_days <= 30:
         # 8〜30日: 需要ピーク・決断促進
-        adj = round(base_price * 0.10)
-        reason = f"出発まで{lead_days}日のため需要ピーク調整(+¥{adj:,})"
+        adj = round(base_price * peak_pct)
+        reason = f"出発まで{lead_days}日のため需要ピーク調整({'%s' % ('+' if adj>0 else '')}¥{adj:,})"
     elif lead_days <= 90:
         # 31〜90日: 標準
         adj = 0
         reason = f"出発まで{lead_days}日のため標準価格（調整なし）"
     else:
         # 90日超: 早期予約割引
-        adj = round(base_price * -0.10)
-        reason = f"出発まで{lead_days}日のため早期予約割引(-¥{abs(adj):,})"
+        adj = round(base_price * early_pct)
+        sign = "-" if adj < 0 else ("+" if adj > 0 else "")
+        reason = f"出発まで{lead_days}日のため早期予約割引({sign}¥{abs(adj):,})"
 
     return adj, reason
 
@@ -212,6 +229,119 @@ def calculate_inventory_decay_factor(lead_days: int, total_lead_days: int, k: fl
 
 
 # ─────────────────────────────────────────
+# 事前仕入・初期価格最適化 (Procurement & Pricing Strategy)
+# ─────────────────────────────────────────
+
+def estimate_demand_and_elasticity(product_name: str, db_path: str = DATABASE) -> tuple[int, float]:
+    """
+    指定された商品の過去の予約実績から、推測される基準需要（平均販売数）と価格弾力性を算出する。
+    """
+    try:
+        conn = sqlite3.connect(db_path)
+        # inventory情報とbooking_events情報を結合
+        query = '''
+            SELECT i.id, i.name, i.base_price, b.quantity, b.sold_price, b.booked_at
+            FROM inventory i
+            LEFT JOIN booking_events b ON i.id = b.inventory_id
+            WHERE i.name = ?
+        '''
+        df = pd.read_sql_query(query, conn, params=(product_name,))
+        conn.close()
+        
+        if df.empty or df['quantity'].isna().all():
+            return 100, -1.5 # デフォルトのフォールバック値
+            
+        # 平均販売数 (IDごとの合計販売量の平均を基準需要とする)
+        sales_per_id = df.groupby('id')['quantity'].sum()
+        base_demand = int(sales_per_id.mean())
+        if base_demand <= 0:
+            base_demand = 50
+            
+        # 価格弾力性の簡易推定 (対数回帰: ln(Q) = a + e * ln(P))
+        # 割引などの価格変動と需要の相関から弾力性を推定
+        df_valid = df.dropna(subset=['quantity', 'sold_price'])
+        if len(df_valid) > 2:
+            # 価格帯ごとの総需要を集計
+            price_demand = df_valid.groupby('sold_price')['quantity'].sum().reset_index()
+            if len(price_demand) > 1:
+                log_P = np.log(price_demand['sold_price'].astype(float) + 1)
+                log_Q = np.log(price_demand['quantity'].astype(float) + 1)
+                slope, _ = np.polyfit(log_P, log_Q, 1)
+                elasticity = round(float(slope), 2)
+                # 極端な値にならないようクリッピング (通常 -0.5 〜 -3.0 程度に収まるようにする)
+                elasticity = max(-5.0, min(-0.1, elasticity))
+            else:
+                elasticity = -1.5
+        else:
+            elasticity = -1.5
+            
+        return base_demand, elasticity
+    except Exception as e:
+        print(f"Error estimating elasticity: {e}")
+        return 100, -1.5
+
+def optimize_procurement_strategy(
+    base_demand: int,
+    reference_price: int,
+    elasticity: float,
+    max_capacity: int,
+    fixed_cost: int,
+    variable_cost: int
+) -> dict:
+    """
+    与えられた前提条件をもとに、利益を最大化する仕入数と初期販売価格の組み合わせをシミュレーションする。
+    """
+    # 探索する価格帯 (基準価格の 20% 〜 300% くらいを 100円刻みで探索)
+    min_p = max(100, int(reference_price * 0.2))
+    max_p = int(reference_price * 3.0)
+    prices = np.arange(min_p, max_p + 100, 100)
+    
+    results = []
+    max_profit = -float('inf')
+    best_price = reference_price
+    best_stock = 0
+    
+    for p in prices:
+        p_f = float(p)
+        if p_f <= 0:
+            continue
+            
+        # 需要関数: Demand = BaseDemand * (Price / RefPrice)^Elasticity
+        demand = float(base_demand) * math.pow(p_f / float(reference_price), elasticity)
+        
+        # 確保可能な最大数はハードキャパシティまで
+        actual_sales = min(demand, float(max_capacity))
+        
+        # 売上・原価・利益計算
+        revenue = actual_sales * p_f
+        cost = float(fixed_cost) + (actual_sales * float(variable_cost))
+        profit = revenue - cost
+        
+        results.append({
+            "price": p,
+            "demand": demand,
+            "sales": actual_sales,
+            "revenue": revenue,
+            "cost": cost,
+            "profit": profit
+        })
+        
+        if profit > max_profit:
+            max_profit = profit
+            best_price = p
+            best_stock = actual_sales
+            
+    df_sim = pd.DataFrame(results)
+    
+    return {
+        "best_base_price": int(best_price),
+        "best_procurement_stock": int(best_stock),
+        "expected_max_profit": int(max_profit),
+        "simulation_data": df_sim
+    }
+
+
+# ─────────────────────────────────────────
 # メイン: PricingResult を生成する
 # ─────────────────────────────────────────
 
@@ -269,9 +399,9 @@ def calculate_pricing_result(
     is_brake_active = False
 
     if strategy == "rule_based":
-        inv_adj, inv_reason = calc_inventory_adjustment(base_price, inv_ratio)
+        inv_adj, inv_reason = calc_inventory_adjustment(base_price, inv_ratio, config=conf)
         if lead_days is not None:
-            time_adj, time_reason = calc_time_adjustment(base_price, lead_days)
+            time_adj, time_reason = calc_time_adjustment(base_price, lead_days, config=conf)
         else:
             time_adj, time_reason = 0, "出発日未設定のため時期調整なし"
 
@@ -306,20 +436,20 @@ def calculate_pricing_result(
         except Exception:
             pass
 
+        adj_amount, act_reason, target_vel, current_vel = calc_demand_based_pricing(
+            inventory_id, base_price, total_stock, remaining_stock, lead_days, elasticity, reference_date=reference_date
+        )
+        demand_adj = adj_amount
         if lead_days is not None:
-            demand_adj, d_reason, _, _ = calc_demand_based_pricing(
-                inventory_id, base_price, total_stock, remaining_stock, lead_days, elasticity=elasticity, reference_date=reference_date
-            )
-            # 崖っぷち減衰(Time Decay)
-            # 全体のリードタイムを90日として計算
-            decay = calculate_inventory_decay_factor(lead_days, 90, k=20.0, p=0.08)
-            target_price = base_price + demand_adj
-            decay_adj = int(target_price * decay - target_price)
+            k = conf.get("decay_k", 20.0)
+            p = conf.get("decay_p", 0.12)
+            decay_factor = calculate_inventory_decay_factor(lead_days, 90, k=k, p=p)
+            decay_adj = round((base_price + demand_adj) * (decay_factor - 1.0))
             
-            if decay < 0.95:
-                reason = f"{d_reason}。さらに出発直前のため見切り割引(-¥{abs(decay_adj):,})が適用されています。"
+            if decay_factor < 0.95:
+                reason = f"{act_reason}。さらに出発直前のため見切り割引(-¥{abs(decay_adj):,})が適用されています。"
             else:
-                reason = d_reason
+                reason = act_reason
         else:
             reason = "出発日未設定のため需要予測・減衰の対象外"
 

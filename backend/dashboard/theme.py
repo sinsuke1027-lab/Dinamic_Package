@@ -7,6 +7,51 @@ class ThemeColors:
     text_sec = "#334155"        # セカンダリ文字色
     text_muted = "#64748b"      # 補助的な文字色（キャプションなど）
     
+    # ─── グラフ用テキスト色 ───
+    chart_text = "#000000"      # グラフの凡例や軸の文字色（完全な黒）
+    chart_grid = "#94a3b8"      # グラフの枠線・グリッド（少し濃いめに）
+    
+    # ─── グラフ用レイアウト関数 ───
+    @classmethod
+    def apply_chart_theme(cls, fig):
+        """PlotlyのFigureに共通カラースキーム（軸色、凡例色、背景色など）を適用する"""
+        fig.update_layout(
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)",
+            font=dict(color=cls.chart_text, size=13),
+            legend=dict(
+                font=dict(color=cls.chart_text, size=13)
+            ),
+            xaxis=dict(
+                color=cls.chart_text,
+                gridcolor=cls.chart_grid,
+                zerolinecolor=cls.chart_grid,
+                tickfont=dict(color=cls.chart_text, size=12),
+                title_font=dict(color=cls.chart_text, size=14, weight="bold")
+            ),
+            yaxis=dict(
+                color=cls.chart_text,
+                gridcolor=cls.chart_grid,
+                zerolinecolor=cls.chart_grid,
+                tickfont=dict(color=cls.chart_text, size=12),
+                title_font=dict(color=cls.chart_text, size=14, weight="bold")
+            ),
+            polar=dict(
+                radialaxis=dict(
+                    color=cls.chart_text,
+                    gridcolor=cls.chart_grid,
+                    tickfont=dict(color=cls.chart_text, size=12)
+                ),
+                angularaxis=dict(
+                    color=cls.chart_text,
+                    gridcolor=cls.chart_grid,
+                    tickfont=dict(color=cls.chart_text, size=12)
+                ),
+                bgcolor="rgba(0,0,0,0)"
+            ),
+        )
+        return fig
+    
     # ─── 背景色 ───
     bg_main = "#f8fafc"         # アプリ全体の背景色
     bg_card = "#ffffff"         # カードやウィジェットの背景色

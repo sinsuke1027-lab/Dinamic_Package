@@ -270,8 +270,13 @@ def apply_custom_css():
     }}
     /* dataframe */
     .stDataFrame, .stDataFrame * {{
-        color: {Theme.text_main} !important;
+        color: {Theme.chart_text} !important;
     }}
+    /* アプリ全体のメイン背景色を強制的に白/ライト系にする */
+    .stApp, .stApp > header, .main {{
+        background-color: {Theme.bg_main} !important;
+    }}
+
     /* info/warning/success メッセージボックス */
     div[data-testid="stAlert"] {{
         border-radius: 10px !important;

@@ -174,19 +174,46 @@ with st.sidebar:
     st.markdown("### 🎛 AI Command Center")
     st.markdown(f"<p style='color:{Theme.text_muted};font-size:.8rem'>AIの行動ルールをリアルタイム編集</p>", unsafe_allow_html=True)
     
-    with st.expander("🛡 セーフティガード (上下限)", expanded=True):
+    with st.expander("🛡 セーフティガード (上下限)", expanded=False):
         max_discount = st.slider("最大割引率 (%)", 0, 80, 30, help="これ以上安くしない限界値")
         max_markup   = st.slider("最大値上げ率 (%)", 0, 200, 50, help="需要超過時の値上げ上限")
     
-    with st.expander("🚔 自動調整 (Velocity Brake)", expanded=True):
+    with st.expander("🚔 自動調整 (Velocity Brake)", expanded=False):
         brake_threshold = st.slider("ブレーキ発動閾値", 1.0, 5.0, 1.5, 0.1, help="期待ペースの何倍でブレーキをかけるか")
         brake_strength  = st.slider("ブレーキ強度 (%)", 0, 30, 5, help="ブレーキ時に上乗セする価格比率")
+
+    with st.expander("⚙️ 詳細設定 (ルールベース)", expanded=False):
+        rule_inv_premium_pct = st.slider("希少プレミアム (%)", 0, 100, 30, help="在庫残20%未満時の割増率")
+        rule_inv_discount_pct = st.slider("在庫余裕割引 (%)", -50, 0, -15, help="在庫残70%以上時の割引率")
+        rule_time_last_min_pct = st.slider("直前見切り割引 (%)", -50, 0, -15, help="出発7日以内の割引率")
+        rule_time_peak_pct = st.slider("ピーク時割増 (%)", 0, 100, 10, help="出発8〜30日前の割増率")
+
+    with st.expander("⚙️ 詳細設定 (需要予測ベース)", expanded=True):
+        decay_pattern = st.selectbox("需要予測カーブのパターン", ["標準カーブ", "早期集中型 (Early-bird)", "直前集中型 (Last-minute)"])
+        
+        # プリセットパラメータの割り当て
+        if decay_pattern == "早期集中型 (Early-bird)":
+            def_k, def_p = 15.0, 0.25
+        elif decay_pattern == "直前集中型 (Last-minute)":
+            def_k, def_p = 30.0, 0.05
+        else:
+            def_k, def_p = 20.0, 0.12
+            
+        st.markdown(f"<p style='color:{Theme.text_muted};font-size:.8rem'>カーブ微調整</p>", unsafe_allow_html=True)
+        decay_k = st.slider("価値減衰カーブの鋭さ (k)", 5.0, 50.0, def_k, 0.5, help="数値が大きいほど値崩れが急激になります")
+        decay_p = st.slider("値崩れ開始ポイント (p)", 0.01, 0.50, def_p, 0.01, help="出発日（0）から見て、どのタイミングから価値が下がり始めるか（1.0=90日前）")
 
     ai_config = {
         "max_discount_pct": max_discount,
         "max_markup_pct":   max_markup,
         "brake_threshold":  brake_threshold,
-        "brake_strength_pct": brake_strength
+        "brake_strength_pct": brake_strength,
+        "rule_inv_premium_pct": rule_inv_premium_pct,
+        "rule_inv_discount_pct": rule_inv_discount_pct,
+        "rule_time_last_min_pct": rule_time_last_min_pct,
+        "rule_time_peak_pct": rule_time_peak_pct,
+        "decay_k": decay_k,
+        "decay_p": decay_p
     }
     
     st.markdown("---")
@@ -254,6 +281,7 @@ try:
     current_prices = {r["inventory_id"]: r["final_price"] for r in results}
     optimal_strategy = calculate_optimal_strategy(
         scenario=curr_scenario, 
+        config=ai_config,
         inventory_ids=target_ids,
         current_prices=current_prices,
         reference_date=v_today
@@ -267,181 +295,20 @@ except Exception as _e:
     st.warning(f"分析エンジンの初期化に失敗しました: {_pkg_err}")
 
 
-# ─── 5タブ構成 ──────────────────────────────
+# ─── ナビゲーションタブ ──────────────────────────────
 tabs = [
-    "📈 Executive Summary",
-    "🎯 Today's Action",
-    "🔍 Analysis & Tracking",
-    "📦 Strategy Map",
-    "🧪 Custom Simulator"
+    "🎯 本日のアクション",
+    "🔍 販売推移と実績分析",
+    "🧪 パッケージ販売シミュレータ",
+    "🛒 事前仕入と初期価格の最適化"
 ]
 selected_tab = st.radio("MainNavigation", tabs, horizontal=True, label_visibility="collapsed", key="main_nav_tab")
 
 
 # ══════════════════════════════════════════════════════════════════
-# Tab 1: 【観察】エグゼクティブ・サマリ (Observe)
-# ══════════════════════════════════════════════════════════════════
-if selected_tab == "📈 Executive Summary":
-    # ─── 過去の実績スライサー追加 ───
-    st.markdown("---")
-    st.markdown("### 🗓️ 販売実績期間フィルタ")
-    st.caption("ROI・売上推移グラフの集計対象期間")
-    
-    # booking_events の最小・最大日付を概算で取得
-    min_date_val = datetime.now(timezone.utc).date() - timedelta(days=90) # デフォルト安全値
-    max_date_val = datetime.now(timezone.utc).date()
-    # 実際はクエリで最小値をとるのが正確ですが、デモでは固定範囲でUI提供します
-    
-    selected_hist_dates = st.date_input(
-        "集計対象期間を選択",
-        value=(min_date_val, max_date_val),
-        help="この期間内に発生した予約データのみがROIグラフの対象になります。"
-    )
-
-    if isinstance(selected_hist_dates, tuple) and len(selected_hist_dates) == 2:
-        hist_start, hist_end = selected_hist_dates
-    elif isinstance(selected_hist_dates, tuple) and len(selected_hist_dates) == 1:
-        hist_start = hist_end = selected_hist_dates[0]
-    else:
-        hist_start, hist_end = min_date_val, max_date_val
-
-    roi_metrics = calculate_roi_metrics(
-        inventory_ids=target_ids,
-        target_start_date=hist_start.isoformat(),
-        target_end_date=hist_end.isoformat(),
-        reference_date=v_today
-    )
-
-    # --- [NEW] 需要予測・着地点セクション ---
-    curr_scenario = st.session_state.get("market_scenario", "base")
-    st.markdown("### 🔮 ビジネス着地点予測 (End-of-Term Forecast)")
-    st.markdown(f'<p class="section-description">※選択中のシナリオ: <b>{curr_scenario.upper()}</b> に基づく Day 0 までの予測</p>', unsafe_allow_html=True)
-    
-    # 全商品の予測を集計
-    # 最終的な着地利益 ＝ (過去の実績売上 ＋ 未販売在庫の予測売上) － (全在庫の仕入原価)
-    total_expected_profit = 0
-    total_unsold = 0
-    
-    total_past_revenue = 0
-    total_full_cost = 0
-    total_future_revenue = 0
-
-    all_events = load_booking_events()
-
-    for r in results:
-        inv = filtered_inv_df[filtered_inv_df["id"] == r["inventory_id"]].iloc[0]
-        cost = int(r["base_price"] * 0.9) # 原価率90%
-        total_full_cost += int(inv["total_stock"] * cost)
-
-        # 過去の実績売上（選択された日付フィルタに関わらず、Virtual Todayまでの売上を計上）
-        if not all_events.empty:
-            past_events = all_events[(all_events["inventory_id"] == r["inventory_id"]) & (pd.to_datetime(all_events["booked_at"]).dt.date <= v_today)]
-            if not past_events.empty:
-                total_past_revenue += past_events["sold_price"].sum()
-
-        # 未来の予測売上（原価を0として売上だけ取得する。利益計算は全体で行うため）
-        forecast = calculate_demand_forecast(r["inventory_id"], r["lead_days"], int(inv["remaining_stock"]), int(inv["total_stock"]), r["base_price"], 0, reference_date=v_today)
-        
-        # expected_profit は ここでは原価0を渡しているので「未来の売上額」となる
-        total_future_revenue += forecast[curr_scenario]["expected_profit"]
-        total_unsold += forecast[curr_scenario]["unsold_stock"]
-
-    total_expected_profit = total_past_revenue + total_future_revenue - total_full_cost
-
-    f_col1, f_col2, f_col3 = st.columns(3)
-    with f_col1:
-        st.markdown(f"""
-        <div class="metric-card">
-            <div class="metric-label" style="color:var(--text-heading) !important;">見込み最終純利益</div>
-            <div class="metric-value" style="color:{Theme.success}; font-size:1.8rem;">¥{int(total_expected_profit):,}</div>
-            <div class="metric-sub">前回比: +¥{int(total_expected_profit - roi_metrics['total_dynamic']):,}</div>
-        </div>""", unsafe_allow_html=True)
-    with f_col2:
-        st.markdown(f"""
-        <div class="metric-card">
-            <div class="metric-label" style="color:var(--text-heading) !important;">予測売れ残り数</div>
-            <div class="metric-value" style="color:{Theme.danger}; font-size:1.8rem;">{int(total_unsold)} units</div>
-            <div class="metric-sub">Day 0 到着時の余剰在庫</div>
-        </div>""", unsafe_allow_html=True)
-    with f_col3:
-        risk_level = "高" if total_unsold > 50 else ("中" if total_unsold > 20 else "低")
-        risk_color = Theme.danger if risk_level == "高" else ("#fbbf24" if risk_level == "中" else Theme.success_light)
-        st.markdown(f"""
-        <div class="metric-card">
-            <div class="metric-label" style="color:var(--text-heading) !important;">在庫破棄リスク</div>
-            <div class="metric-value" style="color:{risk_color}; font-size:1.8rem;">{risk_level}</div>
-            <div class="metric-sub">売れ残り予測に基づく判定</div>
-        </div>""", unsafe_allow_html=True)
-
-    
-    
-    
-
-    
-
-    
-    col_chart, col_donut = st.columns([2, 1])
-    with col_chart:
-        st.markdown("#### 📈 累積売上と廃棄損の推移：固定 vs 動的")
-        df_daily = pd.DataFrame(roi_metrics["daily_data"])
-        if not df_daily.empty:
-            df_daily["cum_dyn_sales"] = df_daily.get("day_dyn_sales", 0).cumsum()
-            df_daily["cum_dyn_waste"] = df_daily.get("day_dyn_waste", 0).cumsum()
-            df_daily["cum_fix_sales"] = df_daily.get("day_fix_sales", 0).cumsum()
-            df_daily["cum_fix_waste"] = df_daily.get("day_fix_waste", 0).cumsum()
-
-            fig_roi = go.Figure()
-            
-            # 1. 動的価格・売上 (Green, solid/filled)
-            fig_roi.add_trace(go.Scatter(
-                x=df_daily["day"], y=df_daily["cum_dyn_sales"], name="動的価格・売上 (実績)",
-                mode='lines+markers', line=dict(color=Theme.success, width=3),
-                fill='tozeroy', fillcolor=Theme.bg_success_alpha
-            ))
-            # 2. 固定価格・売上 (Blue, dashed)
-            fig_roi.add_trace(go.Scatter(
-                x=df_daily["day"], y=df_daily["cum_fix_sales"], name="固定価格・売上 (想定)",
-                mode='lines', line=dict(color='#0ea5e9', width=2, dash='dash')
-            ))
-            # 3. 固定価格・廃棄損 (Orange, dashed)
-            fig_roi.add_trace(go.Scatter(
-                x=df_daily["day"], y=df_daily["cum_fix_waste"], name="固定価格・廃棄損 (想定)",
-                mode='lines', line=dict(color='#fb923c', width=2, dash='dash')
-            ))
-            # 4. 動的価格・廃棄損 (Red, solid) - グラフ上で比較対象として明示
-            fig_roi.add_trace(go.Scatter(
-                x=df_daily["day"], y=df_daily["cum_dyn_waste"], name="動的価格・廃棄損 (実績)",
-                mode='lines+markers', line=dict(color='#f43f5e', width=3)
-            ))
-            
-            light_layout(fig_roi, "累積売上と廃棄損の推移", yaxis_title="累積金額 (円)")
-            st.plotly_chart(fig_roi, use_container_width=True, key="summary_roi_chart")
-        else:
-            st.info("📊 ROI分析用の販売データがまだ蓄積されていません。")
-
-    with col_donut:
-        st.markdown("#### 🛡 在庫救済の内訳")
-        rescued = rescue_metrics["rescued_units"]
-        abandoned = rescue_metrics["total_units"] - rescued
-        fig_donut = go.Figure(data=[go.Pie(
-            labels=["救済済", "未売/通常"], values=[rescued, abandoned],
-            hole=.6, marker_colors=[Theme.success, Theme.text_main]
-        )])
-        light_layout(fig_donut, "救済状況内訳")
-        st.plotly_chart(fig_donut, use_container_width=True, key="summary_donut_chart")
-
-    st.markdown("---")
-
-    st.markdown("---")
-    last_upd = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
-    st.markdown(f'<p style="color:{Theme.text_sec};text-align:right;font-size:.8rem">最終更新: {last_upd}</p>',
-                unsafe_allow_html=True)
-
-
-# ══════════════════════════════════════════════════════════════════
 # Tab 2: 【アクション】Today's Action
 # ══════════════════════════════════════════════════════════════════
-if selected_tab == "🎯 Today's Action":
+if selected_tab == "🎯 本日のアクション":
     def get_velocity_ratio_with_ref(inv_id, ts, rs, ld):
         return get_velocity_ratio(inv_id, ts, rs, ld, reference_date=v_today)
         
@@ -577,7 +444,7 @@ if selected_tab == "🎯 Today's Action":
 # ══════════════════════════════════════════════════════════════════
 # Tab 3: Analysis & Tracking (旧ドリルダウン + ライブ動向)
 # ══════════════════════════════════════════════════════════════════
-if selected_tab == "🔍 Analysis & Tracking":
+if selected_tab == "🔍 販売推移と実績分析":
     st.markdown("### 🔍 Analysis & Tracking")
 
     # --- 共通の商品選択エリア (ライブリストを兼ねる) ---
@@ -595,6 +462,7 @@ if selected_tab == "🔍 Analysis & Tracking":
         except: vr, status = 0, "---"
         
         table_data.append({
+            "出発日": inv.get("departure_date", "不明"),
             "商品名": inv["name"],
             "販売速度": f"{vr:.2f}x",
             "ステータス": status,
@@ -605,13 +473,23 @@ if selected_tab == "🔍 Analysis & Tracking":
     
     table_df = pd.DataFrame(table_data)
     
-    # 選択
-    selected_item_id = st.selectbox(
-        "詳細分析する商品を選択してください", 
-        table_df["ID"].tolist(), 
-        format_func=lambda x: table_df[table_df["ID"]==x]["商品名"].iloc[0],
-        key="global_item_selector"
-    )
+    # 選択（日付と製品でボックスを分ける）
+    col_sel_date, col_sel_name = st.columns(2)
+    with col_sel_date:
+        available_dates = sorted([d for d in table_df["出発日"].unique() if d != "不明"])
+        if not available_dates:
+            available_dates = ["不明"]
+        sel_date = st.selectbox("分析対象の出発日", available_dates, key="global_date_selector")
+        
+    with col_sel_name:
+        available_products = sorted(table_df[table_df["出発日"] == sel_date]["商品名"].unique().tolist())
+        sel_name = st.selectbox("分析対象の製品", available_products, key="global_name_selector")
+        
+    selected_item_df = table_df[(table_df["出発日"] == sel_date) & (table_df["商品名"] == sel_name)]
+    if selected_item_df.empty:
+        st.warning("対象となる商品履歴が見つかりません。")
+        st.stop()
+    selected_item_id = selected_item_df["ID"].iloc[0]
     
     st.markdown("---")
 
@@ -622,201 +500,329 @@ if selected_tab == "🔍 Analysis & Tracking":
     all_events = load_booking_events()
     item_events = all_events[all_events["inventory_id"] == selected_item_id].sort_values("booked_at")
 
-    col_radar, col_info = st.columns([1.2, 1], gap="large")
-    with col_radar:
-        st.markdown(f"#### 🃏 商品カルテ")
-        inv_urgency   = 1.0 - r_sel["inv_ratio"]
-        time_urgency  = max(0.0, 1.0 - (r_sel["lead_days"] or 90) / 60.0)
-        p_elast       = min(abs(r_sel["elasticity"]) / 3.0, 1.0) # 弾力性（絶対値）のスコア化
-        try:
-            vr_k = get_velocity_ratio(r_sel["inventory_id"], int(inv_sel["total_stock"]), int(inv_sel["remaining_stock"]), r_sel["lead_days"], reference_date=v_today)
-            vel_score = min((vr_k or 0.0) / 3.0, 1.0)
-        except: vel_score = 0
-        try: bundle_score = hotel_urgency_score(int(inv_sel["remaining_stock"]), int(inv_sel["total_stock"]), r_sel["lead_days"])
-        except: bundle_score = 0
-
-        radar_labels = ["在庫切迫度", "時間切迫度", "販売速度", "価格弾力性", "バンドル適性"]
-        radar_scores = [inv_urgency, time_urgency, vel_score, p_elast, bundle_score]
-        fig_radar = go.Figure(go.Scatterpolar(
-            r=radar_scores + [radar_scores[0]], theta=radar_labels + [radar_labels[0]],
-            fill="toself", fillcolor=Theme.chart_fill_alpha, line=dict(color=Theme.chart_accent, width=2.5),
-        ))
-        light_layout(fig_radar)
-        fig_radar.update_layout(polar=dict(bgcolor="rgba(0,0,0,0)", radialaxis=dict(visible=True, range=[0, 1])), paper_bgcolor="rgba(0,0,0,0)", height=350)
-        st.plotly_chart(fig_radar, use_container_width=True, key="tracking_radar_chart")
+    # ブッキング傾向 (将来の要件拡張のため全幅を使用)
+    st.markdown("#### 📈 ブッキング傾向 (累積販売率予測)")
     
-    with col_info:
-        st.markdown(f"#### ℹ️ {inv_sel['name']}")
-        st.markdown(f'<div class="karte-card">', unsafe_allow_html=True)
-        st.markdown(f"**動的価格:** ¥{r_sel['final_price']:,}")
-        st.markdown(f"**価格偏差:** {'+' if r_sel['final_price']>=r_sel['base_price'] else ''}¥{r_sel['final_price']-r_sel['base_price']:,}")
-        st.markdown(f"**残在庫:** {int(inv_sel['remaining_stock'])}/{int(inv_sel['total_stock'])} ({int(r_sel['inv_ratio']*100)}%)")
-        st.markdown(f"**価格弾力性:** {r_sel.get('elasticity', -1.5)}")
-        st.markdown(f'<div class="reason-box">{r_sel["reason"]}</div>', unsafe_allow_html=True)
-        st.markdown('</div>', unsafe_allow_html=True)
+    # 将来予測に関するUIと過去実績の期間設定
+    col_pred, col_past, col_compare = st.columns([2, 1.5, 1.5])
+    with col_pred:
+        pred_strategy = st.radio("予測シナリオ:", ["現在の価格戦略を継続", "需要予測ベース戦略を適用"], horizontal=True)
+    with col_past:
+        past_period = st.date_input(
+            "参考にする過去の出発日期間", 
+            value=(v_today - timedelta(days=365), v_today) # デフォルト1年前から現在まで
+        )
+    with col_compare:
+        show_baseline = st.checkbox("価格据え置き（定価）シナリオと比較する", value=False, help="定価のまま販売した場合の予測線を表示し、動的価格変更による売上増減効果（What-If）を確認します。")
+    
+    # 日付から「残り日数（Lead Days）」に変換する関数
+    def to_lead_days(target_date, departure_date):
+        return (departure_date - target_date).days
+    
+    dep_date = pd.to_datetime(inv_sel["departure_date"]).date()
+    total_stock_sel = max(1, int(inv_sel["total_stock"]))
+    
+    fig_curve = go.Figure()
 
-    # 価格形成 WF とブッキングカーブ
-    col_wf, col_curve = st.columns(2)
-    with col_wf:
-        st.markdown("#### 🌊 価格形成プロセス")
-        if "waterfall" in r_sel and r_sel["waterfall"]:
-            wf_data = r_sel["waterfall"]
-            wf_labels = [item["label"] for item in wf_data]
-            wf_values = [item["value"] for item in wf_data]
-            wf_measure = [item["measure"] for item in wf_data]
+    # ① 類似商品（過去の指定期間）の平均実績線を描画
+    similar_invs = inv_df[(inv_df["name"] == inv_sel["name"]) & (inv_df["id"] != selected_item_id)].copy()
+    
+    if isinstance(past_period, (tuple, list)):
+        p_start = past_period[0]
+        p_end = past_period[-1]
+    else:
+        p_start = p_end = past_period
+        
+    if not similar_invs.empty:
+        query_date_col = pd.to_datetime(similar_invs["departure_date"]).dt.date
+        similar_invs = similar_invs[(query_date_col >= p_start) & (query_date_col <= p_end)]
+        
+    past_lines = []
+    for _, sim_inv in similar_invs.iterrows():
+        sim_events = all_events[all_events["inventory_id"] == sim_inv["id"]].sort_values("booked_at").copy()
+        if not sim_events.empty:
+            if "departure_date" in sim_inv and pd.notna(sim_inv["departure_date"]):
+                sim_dep_date = pd.to_datetime(sim_inv["departure_date"]).date()
+            else:
+                continue
+            sim_events["lead_days"] = sim_events["booked_at"].dt.date.apply(lambda d: -to_lead_days(d, sim_dep_date))
+            t_stock = max(1, int(sim_inv.get("total_stock", 1)))
+            sim_events["cum_rate"] = sim_events["quantity"].cumsum() / t_stock * 100
+            
+            # 日数(-90~0)ごとにフォワードフィルして平均計算用の配列を作成
+            df_daily = pd.DataFrame({"lead_days": range(-90, 1)})
+            merged = pd.merge(df_daily, sim_events[["lead_days", "cum_rate"]].drop_duplicates("lead_days", keep="last"), on="lead_days", how="left")
+            merged["cum_rate"] = merged["cum_rate"].ffill().fillna(0)
+            past_lines.append(merged["cum_rate"].values)
 
-            fig_wf = go.Figure(go.Waterfall(
-                measure=wf_measure,
-                x=wf_labels, y=wf_values,
-                increasing=dict(marker=dict(color=Theme.danger)),
-                decreasing=dict(marker=dict(color=Theme.success_light)),
-                totals=dict(marker=dict(color=Theme.chart_accent)),
-            ))
-        else:
-            wf_labels = ["在庫調整", "時期調整", "速度調整", "合計調整"]
-            vel_adj = r_sel['final_price'] - (r_sel['base_price'] + r_sel.get('inventory_adjustment', 0) + r_sel.get('time_adjustment', 0))
-            wf_values = [r_sel.get("inventory_adjustment", 0), r_sel.get("time_adjustment", 0), vel_adj, (r_sel['final_price'] - r_sel['base_price'])]
-            fig_wf = go.Figure(go.Waterfall(
-                measure=["relative", "relative", "relative", "total"],
-                x=wf_labels, y=wf_values,
-                increasing=dict(marker=dict(color=Theme.danger)),
-                decreasing=dict(marker=dict(color=Theme.success_light)),
-                totals=dict(marker=dict(color=Theme.chart_accent)),
-            ))
-        
-        light_layout(fig_wf)
-        st.plotly_chart(fig_wf, use_container_width=True, key="tracking_wf_chart_unique")
+    if past_lines:
+        import numpy as np
+        avg_rates = np.mean(past_lines, axis=0)
+        fig_curve.add_trace(go.Scatter(
+            x=list(range(-90, 1)), y=avg_rates,
+            mode="lines", line=dict(color="rgba(148,163,184,0.8)", width=2, dash="dash"),
+            name="過去実績(平均)",
+            hoverinfo="y"
+        ))
 
-    with col_curve:
-        st.markdown("#### 📈 ブッキング傾向")
+    # ② 選択された商品の実績（基準日まで）を描画
+    item_events_filtered = item_events[item_events["booked_at"].dt.date <= v_today].copy()
+    current_sales_rate = 0
+    current_sales = 0
+    current_lead_day = -to_lead_days(v_today, dep_date)
+    
+    if not item_events_filtered.empty:
+        item_events_filtered["lead_days"] = item_events_filtered["booked_at"].dt.date.apply(lambda d: -to_lead_days(d, dep_date))
+        item_events_filtered["cum_sales_rate"] = item_events_filtered["quantity"].cumsum() / total_stock_sel * 100
+        current_sales = item_events_filtered["quantity"].cumsum().iloc[-1]
         
-        # 基準日までのイベントのみにフィルタリング
-        item_events_filtered = item_events[item_events["booked_at"].dt.date <= v_today].copy()
+        # 連続した線にするため、現在地点(v_today)まで最終実績を水平に延ばす
+        last_event_day = item_events_filtered["lead_days"].iloc[-1]
+        current_sales_rate = item_events_filtered["cum_sales_rate"].iloc[-1]
+        if last_event_day < current_lead_day:
+            new_row = pd.DataFrame({
+                "lead_days": [current_lead_day],
+                "cum_sales_rate": [current_sales_rate]
+            })
+            item_events_filtered = pd.concat([item_events_filtered, new_row], ignore_index=True)
+            
+        fig_curve.add_trace(go.Scatter(
+            x=item_events_filtered["lead_days"], y=item_events_filtered["cum_sales_rate"],
+            mode="lines+markers", line=dict(color=Theme.chart_accent, width=3),
+            name="実績値", fill="tozeroy", fillcolor=Theme.chart_fill_alpha2
+        ))
         
-        if not item_events_filtered.empty:
-            item_events_filtered["cum_sales"] = item_events_filtered["quantity"].cumsum()
-            fig_curve = go.Figure()
+        # 販売単価推移 (実績)
+        if "sold_price" in item_events_filtered.columns:
+            daily_price = item_events_filtered.groupby("lead_days")["sold_price"].mean().reset_index()
+            daily_price = daily_price.sort_values("lead_days")
+            
+            if not daily_price.empty:
+                # 最小のlead_daysから現在のlead_days(または0)までの全整数の範囲を作成
+                min_day = int(daily_price["lead_days"].min())
+                target_end_day = int(max(current_lead_day, daily_price["lead_days"].max()))
+                
+                # 全日数のDataFrameを作成して結合し、欠損日を前日の価格で補完(ffill)する
+                all_days = pd.DataFrame({"lead_days": range(min_day, target_end_day + 1)})
+                daily_price = pd.merge(all_days, daily_price, on="lead_days", how="left")
+                daily_price["sold_price"] = daily_price["sold_price"].ffill()
+
             fig_curve.add_trace(go.Scatter(
-                x=item_events_filtered["booked_at"], y=item_events_filtered["cum_sales"],
-                mode="lines+markers", line=dict(color=Theme.chart_accent, width=3),
-                fill="tozeroy", fillcolor=Theme.chart_fill_alpha2
+                x=daily_price["lead_days"], y=daily_price["sold_price"],
+                mode="lines+markers", line=dict(color=Theme.warning, width=2),
+                name="販売単価 (実績)", yaxis="y2"
             ))
-            light_layout(fig_curve)
-            st.plotly_chart(fig_curve, use_container_width=True, key="tracking_curve_chart_unique")
+    
+    # ③ 将来予測の描画（基準日〜出発日まで）
+    if current_lead_day < 0:
+        days_remaining = abs(current_lead_day)
+        
+        # まず現在価格を取得
+        if 'daily_price' in locals() and not daily_price.empty:
+            last_price = daily_price["sold_price"].iloc[-1]
+        elif not item_events_filtered.empty:
+            last_price = item_events_filtered["sold_price"].iloc[-1]
         else:
-            st.info("販売データがありません")
+            last_price = r_sel['base_price']
+            
+        # 単価の予測と販売率の予測シミュレーション配列作成
+        sim_days = list(range(current_lead_day, 1))
+        sim_prices = [last_price]
+        sim_sales_rates = [current_sales_rate]
+        sim_sales_count = [current_sales]
+        
+        curr_p = last_price
+        curr_s = current_sales
+        base_price = r_sel['base_price']
+        cost = int(inv_sel.get('cost', base_price * 0.75)) # DBから原価を取得（フォールバックあり）
+        
+        revenue_strategy_future = 0
+        
+        # --- 直近の実績に合わせた予測ベロシティ(ベースの傾き)の計算 ---
+        lookback_days = 30
+        overall_v = current_sales / max(1, (90 - days_remaining))
+        if not item_events_filtered.empty and (90 - days_remaining) >= lookback_days:
+            # 基準日(current_lead_day)から過去30日間のデータを取り出す
+            recent_events = item_events_filtered[
+                (item_events_filtered["lead_days"] <= current_lead_day) & 
+                (item_events_filtered["lead_days"] > (current_lead_day - lookback_days))
+            ]
+            recent_v = recent_events["quantity"].sum() / lookback_days
+            # 直近トレンドを強く反映(80%)しつつ、全体平均もわずかに加味(20%)して極端なゼロを回避
+            base_daily_v = (recent_v * 0.8) + (overall_v * 0.2)
+        else:
+            base_daily_v = overall_v
+            
+        elasticity_val = abs(r_sel.get('elasticity', 1.5))
+
+        for i in range(1, len(sim_days)):
+            d = abs(sim_days[i])
+            
+            if pred_strategy == "現在の価格戦略を継続":
+                ideal_sales = total_stock_sel * (1 - (d / 90))
+                if curr_s > ideal_sales:
+                    curr_p = int(min(curr_p * 1.015, base_price * 1.5))
+                else:
+                    curr_p = int(max(curr_p * 0.985, base_price * 0.5))
+                # 価格変動による需要(販売数)への影響をシミュレーション
+                price_ratio = base_price / curr_p if curr_p > 0 else 1.0
+                curr_v = base_daily_v * (price_ratio ** elasticity_val)
+                curr_s += curr_v
+            else:
+                # 需要予測: 弾力性に基づいてより機動的に動かす
+                if d > 14:
+                    curr_p = int(min(curr_p * 1.025, base_price * 1.8))
+                else:
+                    curr_p = int(max(curr_p * 0.95, base_price * 0.4))
+                
+                # 価格変動による需要(販売数)への影響をシミュレーション
+                price_ratio = base_price / curr_p if curr_p > 0 else 1.0
+                # 需要予測ベースの場合、さらにベース需要を15%引き上げる効果を想定
+                curr_v = (base_daily_v * 1.15) * (price_ratio ** elasticity_val)
+                curr_s += curr_v
+            
+            actual_daily_sales = curr_s - sim_sales_count[-1]
+            revenue_strategy_future += (actual_daily_sales * curr_p)
+            
+            sim_prices.append(curr_p)
+            sim_sales_count.append(curr_s)
+            sim_sales_rates.append(min(100.0, (curr_s / total_stock_sel) * 100))
+            
+        projected_sales_rate = sim_sales_rates[-1]
+        projected_sales = int(min(total_stock_sel, sim_sales_count[-1]))
+        
+        # 過去の実績売上（簡易計算：現在までの売上合計）
+        current_revenue = current_sales * last_price 
+        projected_revenue_strategy = current_revenue + revenue_strategy_future
+        
+        # 廃棄損の計算 (売れ残り数 * 原価)
+        spoilage_qty_strategy = max(0, total_stock_sel - projected_sales)
+        spoilage_cost_strategy = spoilage_qty_strategy * cost
+        net_profit_strategy = projected_revenue_strategy - spoilage_cost_strategy
+        
+        # 予測販売率推移（動的）
+        fig_curve.add_trace(go.Scatter(
+            x=sim_days, y=sim_sales_rates,
+            mode="lines", line=dict(color=Theme.primary, width=3, dash="dot"),
+            name="予測推移"
+        ))
+        
+        fig_curve.add_trace(go.Scatter(
+            x=[0], y=[projected_sales_rate],
+            mode="markers", marker=dict(color=Theme.primary, size=10, symbol="star"),
+            name="最終着地（予測）"
+        ))
+
+        # 単価の予測線 (動的変動)
+        if last_price > 0:
+            fig_curve.add_trace(go.Scatter(
+                x=sim_days, y=sim_prices,
+                mode="lines", line=dict(color=Theme.warning, width=2, dash="dot"),
+                name="予測推移 (単価)", yaxis="y2"
+            ))
+
+        # ④ 価格据え置き（ベースライン）シナリオの予測と比較（トグルON時のみ）
+        if show_baseline:
+            # 定価で販売し続けた場合の予測販売数
+            base_velocity = current_sales / max(1, (90 - days_remaining))
+            if base_price > last_price:
+                price_ratio = last_price / base_price
+                base_velocity = base_velocity * (price_ratio ** abs(r_sel.get('elasticity', 1.5))) 
+            
+            projected_sales_baseline = int(min(total_stock_sel, current_sales + (base_velocity * days_remaining)))
+            projected_sales_rate_baseline = (projected_sales_baseline / total_stock_sel) * 100
+            
+            # 定価維持時の売上と廃棄損
+            projected_revenue_baseline = current_revenue + ((projected_sales_baseline - current_sales) * base_price)
+            spoilage_qty_baseline = max(0, total_stock_sel - projected_sales_baseline)
+            spoilage_cost_baseline = spoilage_qty_baseline * cost
+            net_profit_baseline = projected_revenue_baseline - spoilage_cost_baseline
+            
+            revenue_lift = net_profit_strategy - net_profit_baseline
+
+            # ベースラインの販売率予測線（グレー点線）
+            fig_curve.add_trace(go.Scatter(
+                x=[current_lead_day, 0], y=[current_sales_rate, projected_sales_rate_baseline],
+                mode="lines", line=dict(color=Theme.text_muted, width=2, dash="dot"),
+                name="価格据え置き予測 (販売率)"
+            ))
+            
+            # ベースラインの販売単価予測線（グレー点線：定価の維持）
+            fig_curve.add_trace(go.Scatter(
+                x=[current_lead_day, 0], y=[base_price, base_price],
+                mode="lines", line=dict(color=Theme.text_muted, width=1, dash="dot"),
+                name="定価ライン", yaxis="y2"
+            ))
+            
+            # 売上インパクトのハイライトパネル（HTMLマトリクス表示）をグラフ上部に表示
+            if revenue_lift > 0:
+               lift_text = f"<span style='color:{Theme.success};'><b>+¥{revenue_lift:,.0f}の増益効果</b></span>"
+            else:
+               lift_text = f"<span style='color:{Theme.danger};'><b>¥{revenue_lift:,.0f}の減益リスク</b></span>"
+            
+            st.markdown(f"""
+            <div style="background:{Theme.bg_card}; padding:15px; border-radius:8px; border:1px dashed {Theme.primary}; margin-bottom:15px;">
+                <div style="font-size:0.95rem; color:{Theme.text_dark}; margin-bottom:10px; font-weight:bold;">💡 What-If 分析結果明細 (最終着地予測)</div>
+                <table style="width:100%; border-collapse:collapse; font-size:0.85rem; text-align:right;">
+                    <tr style="border-bottom:1px solid {Theme.border_light}; color:{Theme.text_muted}; text-align:right;">
+                        <th style="text-align:left; padding:6px;">シナリオ</th>
+                        <th style="padding:6px; color:{Theme.primary};">現在(基準日)の残在庫</th>
+                        <th style="padding:6px;">最終販売数</th>
+                        <th style="padding:6px;">最終残数 (廃棄ロス)</th>
+                        <th style="padding:6px;">売上高</th>
+                        <th style="padding:6px; color:{Theme.danger};">廃棄損 (原価¥{cost:,})</th>
+                        <th style="padding:6px; font-weight:bold; color:{Theme.text_dark};">最終利益評価額</th>
+                    </tr>
+                    <tr style="border-bottom:1px solid {Theme.border_light};">
+                        <td style="text-align:left; padding:8px; color:{Theme.text_muted};">定価維持 (ベースライン)</td>
+                        <td style="padding:8px; color:{Theme.text_dark};">{total_stock_sel - current_sales}</td>
+                        <td style="padding:8px;">{projected_sales_baseline} / {total_stock_sel}</td>
+                        <td style="padding:8px;">{spoilage_qty_baseline}</td>
+                        <td style="padding:8px;">¥{projected_revenue_baseline:,.0f}</td>
+                        <td style="padding:8px; color:{Theme.danger};">-¥{spoilage_cost_baseline:,.0f}</td>
+                        <td style="padding:8px; font-weight:bold; color:{Theme.text_muted}; font-size:1rem;">¥{net_profit_baseline:,.0f}</td>
+                    </tr>
+                    <tr style="background:#f4f6f8;">
+                        <td style="text-align:left; padding:8px; font-weight:bold; color:{Theme.primary};">戦略適用時 ({pred_strategy})</td>
+                        <td style="padding:8px; font-weight:bold; color:{Theme.text_dark};">{total_stock_sel - current_sales}</td>
+                        <td style="padding:8px; font-weight:bold;">{projected_sales} / {total_stock_sel}</td>
+                        <td style="padding:8px; font-weight:bold;">{spoilage_qty_strategy}</td>
+                        <td style="padding:8px; font-weight:bold;">¥{projected_revenue_strategy:,.0f}</td>
+                        <td style="padding:8px; font-weight:bold; color:{Theme.danger};">-¥{spoilage_cost_strategy:,.0f}</td>
+                        <td style="padding:8px; font-weight:bold; color:{Theme.text_dark}; font-size:1.1rem;">¥{net_profit_strategy:,.0f}</td>
+                    </tr>
+                </table>
+                <div style="text-align:right; margin-top:12px; font-size:1.1rem; font-weight:bold;">
+                    ダイナミックプライシング適用効果: {lift_text}
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+    # グラフのレイアウト調整（X軸を負数から0へ向かうようにする）
+    light_layout(fig_curve)
+    fig_curve.update_layout(
+        xaxis_title="残り日数 (出発日まで)",
+        yaxis_title="累計販売率 (%)",
+        xaxis=dict(range=[-90, 5]),  # -90日前から出発日(0)の少し後まで
+        yaxis=dict(range=[0, 100], side="left"),
+        yaxis2=dict(
+            title="販売単価 (¥)",
+            overlaying="y",
+            side="right",
+            rangemode="tozero",
+            showgrid=False
+        ),
+        hovermode="x unified",
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+    )
+    st.plotly_chart(Theme.apply_chart_theme(fig_curve), use_container_width=True, key="tracking_curve_chart_unique")
+    
     st.markdown("---")
     st.markdown("#### 🚚 商品一覧 & 異常検知")
     st.dataframe(table_df, use_container_width=True, hide_index=True)
 
-# 🪟 Tab 4: Strategy Map
-if selected_tab == "📦 Strategy Map":
-    st.markdown("### 📦 Strategy Map")
-
-    col_map, col_kpi = st.columns([2, 1], gap="large")
-    
-    with col_map:
-        st.markdown("#### 🗺 パッケージ・シナジー・マップ")
-        # バブルチャートで「在庫切迫度」x「利益改善額」を可視化
-        bubble_data = []
-        for rec in optimal_strategy["recommendations"]:
-            if rec["strategy"] == "bundle":
-                h_id = rec.get("item_id")
-                inv_matches = filtered_inv_df[filtered_inv_df["id"] == h_id]
-                r_matches = [r for r in results if r["inventory_id"] == h_id]
-                urg = 0.5
-                if not inv_matches.empty and r_matches:
-                    inv = inv_matches.iloc[0]
-                    r_h = r_matches[0]
-                    try:
-                        from packaging_engine import hotel_urgency_score
-                        urg = hotel_urgency_score(int(inv["remaining_stock"]), int(inv["total_stock"]), r_h.get("lead_days", 90))
-                    except: pass
-
-                bubble_data.append({
-                    "name": rec["item_name"],
-                    "urgency": urg,
-                    "lift": rec["gain"],
-                    "score": min(100, 20 + (rec["gain"] / 5000)) # スコア（バブルサイズ）も利益に応じて変動
-                })
-        if bubble_data:
-            b_df = pd.DataFrame(bubble_data)
-            fig_bubble = go.Figure(data=[go.Scatter(
-                x=b_df["urgency"], y=b_df["lift"],
-                mode='markers+text',
-                text=b_df["name"],
-                textposition="top center",
-                marker=dict(size=b_df["score"], color=b_df["lift"], colorscale='Viridis', showscale=True)
-            )])
-            light_layout(fig_bubble, "在庫切迫度 vs 利益改善リフト", yaxis_title="期待利益改善額 (円)")
-            fig_bubble.update_layout(xaxis_title="在庫切迫度スコア (1.0=緊急)")
-            st.plotly_chart(fig_bubble, use_container_width=True, key="strategy_bubble_map_unique")
-        else:
-            st.info("表示可能な戦略データがありません")
-
-        st.markdown("#### 🏆 ペアリング利益ランキング")
-        pairing_data = []
-        for rec in optimal_strategy["recommendations"]:
-            if rec["strategy"] == "bundle":
-                h_name = rec['item_name']
-                f_name = rec.get('partner_name', 'Unknown Flight')
-                pairing_data.append({
-                    "pair": f"{h_name}<br><span style='font-size:10px;color:{Theme.text_sec}'>+ {f_name}</span>",
-                    "gain": rec["gain"],
-                    "text": f"+¥{rec['gain']:,}"
-                })
-        
-        if pairing_data:
-            # 利益順に並び替え (Plotlyの横棒は下から上へ描画されるため昇順ソート)
-            pairing_data = sorted(pairing_data, key=lambda x: x["gain"])
-            pairs = [p["pair"] for p in pairing_data]
-            gains = [p["gain"] for p in pairing_data]
-            texts = [p["text"] for p in pairing_data]
-
-            fig_bar = go.Figure(go.Bar(
-                x=gains,
-                y=pairs,
-                orientation='h',
-                text=texts,
-                textposition='outside',
-                marker=dict(
-                    color=gains,
-                    colorscale='Emrld',
-                    line=dict(color='rgba(0,0,0,0)', width=1)
-                )
-            ))
-            light_layout(fig_bar)
-            fig_bar.update_layout(
-                height=max(300, len(pairs) * 60 + 100),
-                margin=dict(t=20, l=150, r=50, b=20),
-                xaxis=dict(title="利益改善額 (円)", gridcolor=Theme.text_main, showgrid=True),
-                yaxis=dict(title="", showgrid=False)
-            )
-            st.plotly_chart(fig_bar, use_container_width=True, key="strategy_bar_unique")
-        else:
-            st.info("ペアリングデータがありません")
-
-    with col_kpi:
-        st.markdown("#### 🛡 全体在庫救済率")
-        rescued = rescue_metrics["rescued_units"]
-        abandoned = rescue_metrics["total_units"] - rescued
-        fig_donut = go.Figure(data=[go.Pie(
-            labels=["救済済", "未売不可避"], values=[rescued, abandoned],
-            hole=.6, marker_colors=[Theme.success, Theme.text_main]
-        )])
-        fig_donut.update_layout(height=300, margin=dict(t=0, b=0, l=0, r=0))
-        light_layout(fig_donut)
-        st.plotly_chart(fig_donut, use_container_width=True, key="strategy_donut_unique")
-        
-        st.markdown(f"""
-        <div class="metric-card">
-            <div class="metric-label">自動調整発動数</div>
-            <div class="metric-value">{len([r for r in results if r.get('is_brake_active')])}</div>
-        </div>
-        """, unsafe_allow_html=True)
-
 # 🧪 Tab 5: Custom Simulator
-if selected_tab == "🧪 Custom Simulator":
+if selected_tab == "🧪 パッケージ販売シミュレータ":
     st.markdown("### 🧪 カスタム・シミュレーター（時系列シナリオ分析）")
     st.markdown('<p class="section-description">「今すぐパッケージで売り切る」vs「単品で粘る」の利益推移を描画し、在庫の価値が消える前に打つべき最適解を導き出します。</p>', unsafe_allow_html=True)
     
@@ -1153,6 +1159,7 @@ if selected_tab == "🧪 Custom Simulator":
             remaining_stock=h_stock,
             departure_date=target_hotel.get("departure_date"),
             elasticity=target_hotel.get("elasticity", -1.5),
+            config=ai_config,
             reference_date=v_today,
             strategy="rule_based"
         )
@@ -1164,6 +1171,7 @@ if selected_tab == "🧪 Custom Simulator":
             remaining_stock=f_stock,
             departure_date=target_flight.get("departure_date"),
             elasticity=target_flight.get("elasticity", -1.5),
+            config=ai_config,
             reference_date=v_today,
             strategy="rule_based"
         )
@@ -1189,7 +1197,7 @@ if selected_tab == "🧪 Custom Simulator":
             "elasticity": target_flight.get("elasticity", -1.5)
         }
         sim_rule = simulate_sales_scenario(
-            h_item_sim_rule, f_item_sim_rule, int(total_discount), lead_days, market_condition, reference_date=v_today
+            h_item_sim_rule, f_item_sim_rule, int(total_discount), lead_days, market_condition, config=ai_config, reference_date=v_today
         )
 
         # 2. 需要予測ベースのシミュレーション
@@ -1201,6 +1209,7 @@ if selected_tab == "🧪 Custom Simulator":
             remaining_stock=h_stock,
             departure_date=target_hotel.get("departure_date"),
             elasticity=target_hotel.get("elasticity", -1.5),
+            config=ai_config,
             reference_date=v_today,
             strategy="demand_based"
         )
@@ -1212,6 +1221,7 @@ if selected_tab == "🧪 Custom Simulator":
             remaining_stock=f_stock,
             departure_date=target_flight.get("departure_date"),
             elasticity=target_flight.get("elasticity", -1.5),
+            config=ai_config,
             reference_date=v_today,
             strategy="demand_based"
         )
@@ -1221,7 +1231,7 @@ if selected_tab == "🧪 Custom Simulator":
         f_item_sim_demand["current_price"] = f_pricing_demand["final_price"]
         f_item_sim_demand["velocity_ratio"] = f_pricing_demand.get("velocity_ratio") or 1.0
         sim_demand = simulate_sales_scenario(
-            h_item_sim_demand, f_item_sim_demand, int(total_discount), lead_days, market_condition, reference_date=v_today
+            h_item_sim_demand, f_item_sim_demand, int(total_discount), lead_days, market_condition, config=ai_config, reference_date=v_today
         )
 
         st.markdown("#### 📈 P/L 予測シミュレーション（実績＋将来予測）")
@@ -1507,7 +1517,7 @@ if selected_tab == "🧪 Custom Simulator":
         fig_sim.update_yaxes(title_text="累積金額 (円)", secondary_y=False, range=[0, max_y], gridcolor=Theme.border_light, tickformat=",d")
         fig_sim.update_yaxes(title_text="残在庫割合 (%)", secondary_y=True, range=[0, 105], gridcolor="rgba(0,0,0,0)", tickformat=".1f")
 
-        st.plotly_chart(fig_sim, use_container_width=True, key="sim_timeseries_chart")
+        st.plotly_chart(Theme.apply_chart_theme(fig_sim), use_container_width=True, key="sim_timeseries_chart")
         
         # --- 4. 決着 KPI ---
         diff = res_sel - res_n
@@ -1629,6 +1639,133 @@ if selected_tab == "🧪 Custom Simulator":
 
     else:
         st.info("比較対象となるホテルとフライトをそれぞれ選択してください。")
+
+# ══════════════════════════════════════════════════════════════════
+# Tab 6: 🛒 Procurement & Pricing Strategy
+# ══════════════════════════════════════════════════════════════════
+if selected_tab == "🛒 事前仕入と初期価格の最適化":
+    # 遅延インポート（依存関係やメモリ節約のため）
+    from pricing_engine import estimate_demand_and_elasticity, optimize_procurement_strategy
+    
+    st.markdown("### 🛒 Procurement & Pricing Strategy (事前仕入・初期価格最適化)")
+    st.markdown('<p class="section-description">指定商品の過去の実績データから基準需要と価格弾力性を推定し、目標利益を最大化する初期仕入セット数と販売価格をシミュレーションします。</p>', unsafe_allow_html=True)
+    
+    # 商品選択:
+    available_products = sorted(inv_df["name"].unique().tolist())
+    selected_prod = st.selectbox("分析対象の商品を選択", available_products, help="過去の予約実績に基づいて需要と価格弾力性を推計します")
+    
+    st.markdown("---")
+    
+    # デフォルトの需要と弾力性を推計
+    with st.spinner("過去データよりパラメータを推計中..."):
+        est_demand, est_elasticity = estimate_demand_and_elasticity(selected_prod, DB_PATH)
+    
+    # 対象商品のベース価格をデフォルト値として取得
+    prod_info = inv_df[inv_df["name"] == selected_prod]
+    default_base_price = int(prod_info.iloc[0]["base_price"]) if not prod_info.empty else 30000
+    default_max_cap = int(prod_info.iloc[0]["total_stock"]) if not prod_info.empty else 150
+            
+    # ユーザー入力フォーム
+    st.markdown("#### ⚙️ 前提条件の設定")
+    col_p1, col_p2, col_p3 = st.columns(3)
+    
+    with col_p1:
+        st.markdown("**市場の反応**")
+        ui_base_demand = st.number_input("基準需要（件/期間）※推計値", min_value=1, max_value=10000, value=est_demand, step=10, help="過去の平均販売数から推測された基本需要です")
+        ui_elasticity = st.slider("価格弾力性 ※推計値", min_value=-5.0, max_value=-0.1, value=est_elasticity, step=0.1, help="価格変化に対する需要の敏感度。通常は負の値です。")
+        ui_ref_price = st.number_input("基準となる価格 (円)", min_value=1000, max_value=500000, value=default_base_price, step=1000)
+    
+    with col_p2:
+        st.markdown("**制約とコスト**")
+        ui_max_capacity = st.number_input("仕入上限数（ハード限界）", min_value=10, max_value=1000, value=default_max_cap, step=10)
+        ui_fixed_cost = st.number_input("固定費（全体）", min_value=0, max_value=10000000, value=0, step=10000)
+        ui_var_cost = st.number_input("１ユニットあたりの変動費 (仕入原価等)", min_value=0, max_value=300000, value=int(default_base_price * 0.9), step=1000)
+        
+    with col_p3:
+        st.markdown("**シミュレーション実行**")
+        st.info("左記のパラメータに基づいて、「利益が最大」となるベストな仕入数と初期ベース価格を導出します。")
+        run_sim = st.button("🚀 最適化シミュレーションを実行", type="primary", use_container_width=True)
+        
+    if run_sim:
+        res = optimize_procurement_strategy(
+            base_demand=ui_base_demand,
+            reference_price=ui_ref_price,
+            elasticity=ui_elasticity,
+            max_capacity=ui_max_capacity,
+            fixed_cost=ui_fixed_cost,
+            variable_cost=ui_var_cost
+        )
+        
+        st.markdown("---")
+        st.markdown("#### 🎯 最適化結果")
+        
+        # KPIカード
+        rc1, rc2, rc3 = st.columns(3)
+        with rc1:
+            st.markdown(f"""
+            <div style="background:{Theme.grad_ai}; border:1px solid {Theme.border_ai_alpha}; border-radius:15px; padding:20px; text-align:center;">
+                <div style="font-size:0.9rem; color:{Theme.text_dark}; font-weight:700;">推奨ベース販売価格</div>
+                <div style="font-size:2rem; font-weight:900; color:{Theme.chart_accent};">¥{res['best_base_price']:,}</div>
+            </div>
+            """, unsafe_allow_html=True)
+        with rc2:
+            st.markdown(f"""
+            <div style="background:{Theme.grad_info}; border:1px solid {Theme.border_info_alpha}; border-radius:15px; padding:20px; text-align:center;">
+                <div style="font-size:0.9rem; color:{Theme.text_dark}; font-weight:700;">推奨初期仕入数</div>
+                <div style="font-size:2rem; font-weight:900; color:{Theme.info};">{res['best_procurement_stock']:,} ユニット</div>
+            </div>
+            """, unsafe_allow_html=True)
+        with rc3:
+            st.markdown(f"""
+            <div style="background:{Theme.bg_success_alpha}; border:1px solid {Theme.border_success_alpha}; border-radius:15px; padding:20px; text-align:center;">
+                <div style="font-size:0.9rem; color:{Theme.text_dark}; font-weight:700;">予想最大利益</div>
+                <div style="font-size:2rem; font-weight:900; color:{Theme.success};">¥{res['expected_max_profit']:,}</div>
+            </div>
+            """, unsafe_allow_html=True)
+            
+        # グラフ表示
+        st.markdown("#### 📈 価格弾力性に基づく利益・売上シミュレーションカーブ")
+        df_sim = res['simulation_data']
+        from plotly.subplots import make_subplots
+        
+        fig_curve = make_subplots(specs=[[{"secondary_y": True}]])
+        
+        # 利益カーブ (主軸)
+        fig_curve.add_trace(go.Scatter(
+            x=df_sim['price'], y=df_sim['profit'], name="予測利益",
+            mode='lines', line=dict(color=Theme.success, width=4)
+        ), secondary_y=False)
+        
+        # 売上カーブ (主軸)
+        fig_curve.add_trace(go.Scatter(
+            x=df_sim['price'], y=df_sim['revenue'], name="予測売上",
+            mode='lines', line=dict(color=Theme.info, width=2, dash='dash')
+        ), secondary_y=False)
+        
+        # 需要カーブ (副軸)
+        fig_curve.add_trace(go.Scatter(
+            x=df_sim['price'], y=df_sim['demand'], name="予測需要数",
+            mode='lines', line=dict(color=Theme.chart_accent, width=2, dash='dot')
+        ), secondary_y=True)
+        
+        # ピーク値（最適価格）にマーカー
+        fig_curve.add_trace(go.Scatter(
+            x=[res['best_base_price']], y=[res['expected_max_profit']], 
+            mode='markers+text', name="利益最大化ポイント",
+            marker=dict(color=Theme.danger, size=12, symbol='star'),
+            text=[f"Peak: ¥{res['expected_max_profit']:,}"], textposition="top center"
+        ), secondary_y=False)
+        
+        light_layout(fig_curve, secondary_y=True)
+        fig_curve.update_layout(
+            xaxis_title="設定販売価格 (円)",
+            hovermode="x unified",
+            height=500
+        )
+        fig_curve.update_yaxes(title_text="金額 (円)", secondary_y=False, tickformat=",d")
+        fig_curve.update_yaxes(title_text="需要数 (ユニット)", secondary_y=True, showgrid=False)
+        
+        st.plotly_chart(Theme.apply_chart_theme(fig_curve), use_container_width=True)
 
 # ══════════════════════════════════════════════════════════════════
 # Footer & Logs
