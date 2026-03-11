@@ -3745,3 +3745,1414 @@ For `use_container_width=True`, use `width='stretch'`. For `use_container_width=
 `use_container_width` will be removed after 2025-12-31.
 
 For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-27 22:04:22.295 304 GET / (::1) 1.41ms
+2026-02-27 22:04:22.435 304 GET /_stcore/health (::1) 0.66ms
+2026-02-27 22:04:22.436 304 GET /_stcore/host-config (::1) 0.46ms
+2026-02-27 22:04:22.440 101 GET /_stcore/stream (::1) 1.19ms
+2026-02-27 22:04:22.727 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-27 22:04:22.734 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-27 22:06:41.451 304 GET / (::1) 0.56ms
+2026-02-27 22:06:41.534 304 GET /_stcore/health (::1) 0.58ms
+2026-02-27 22:06:41.534 304 GET /_stcore/host-config (::1) 0.36ms
+2026-02-27 22:06:41.538 101 GET /_stcore/stream (::1) 0.71ms
+2026-02-27 22:06:41.779 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-27 22:06:41.787 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-27 22:06:46.608 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-27 22:06:46.615 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-27 22:06:53.668 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-27 22:06:53.676 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-27 22:06:55.260 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-27 22:06:55.267 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-27 22:06:56.582 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-27 22:06:56.589 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-27 22:07:26.789 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-27 22:07:26.797 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-27 22:07:26.805 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-27 22:07:26.806 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-27 22:07:32.377 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-27 22:07:32.384 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-27 22:07:32.391 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-27 22:07:35.819 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-27 22:07:35.821 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-27 22:07:35.822 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-27 22:07:35.823 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-27 22:09:41.241 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-27 22:09:41.245 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-27 22:09:41.245 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-27 22:09:41.246 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-27 22:10:04.239 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-27 22:10:04.244 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-27 22:10:04.245 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-27 22:10:04.246 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-27 22:10:10.638 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-27 22:10:10.640 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-27 22:10:10.641 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-27 22:10:10.641 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-27 22:10:16.575 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-27 22:10:16.578 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-27 22:10:16.578 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-27 22:10:16.579 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-27 23:09:31.151 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-27 23:09:31.159 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-27 23:19:35.858 304 GET / (::1) 7.07ms
+2026-02-27 23:19:36.009 304 GET /_stcore/health (::1) 1.26ms
+2026-02-27 23:19:36.009 304 GET /_stcore/host-config (::1) 0.46ms
+2026-02-27 23:19:36.013 101 GET /_stcore/stream (::1) 1.48ms
+2026-02-27 23:19:36.314 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-27 23:19:36.321 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-27 23:19:38.575 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-27 23:19:38.578 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-27 23:19:38.579 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-27 23:19:38.580 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-27 23:19:53.811 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-27 23:19:53.814 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-27 23:19:53.815 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-27 23:19:53.816 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-27 23:20:20.024 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-27 23:20:20.026 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-27 23:20:20.027 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-27 23:20:20.028 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-27 23:20:25.398 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-27 23:20:25.400 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-27 23:20:25.401 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-27 23:20:25.402 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-27 23:20:38.937 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-27 23:20:38.940 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-27 23:20:38.941 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-27 23:20:38.941 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-27 23:20:39.715 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-27 23:20:39.718 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-27 23:20:39.718 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-27 23:20:39.719 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-27 23:20:55.027 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-27 23:20:55.030 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-27 23:20:55.031 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-27 23:20:55.031 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-27 23:20:57.340 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-27 23:20:57.342 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-27 23:20:57.343 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-27 23:20:57.344 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-27 23:21:13.957 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-27 23:21:13.960 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-27 23:21:13.961 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-27 23:21:13.962 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-27 23:24:31.161 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-27 23:24:31.164 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-27 23:24:31.165 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-27 23:24:31.165 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-27 23:25:44.542 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-27 23:25:44.546 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-27 23:25:44.546 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-27 23:25:44.547 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-27 23:25:46.716 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-27 23:25:46.719 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-27 23:25:46.719 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-27 23:25:46.720 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-27 23:25:50.288 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-27 23:25:50.290 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-27 23:25:50.291 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-27 23:25:50.292 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-27 23:25:53.674 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-27 23:25:53.677 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-27 23:25:53.677 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-27 23:25:53.678 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-27 23:25:59.888 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-27 23:25:59.891 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-27 23:25:59.892 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-27 23:25:59.892 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-27 23:26:31.413 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-27 23:26:31.416 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-27 23:26:31.417 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-27 23:26:31.417 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-27 23:26:34.591 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-27 23:26:34.594 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-27 23:26:34.594 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-27 23:26:34.595 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-27 23:26:36.716 304 GET / (::1) 1.51ms
+2026-02-27 23:26:36.822 304 GET /_stcore/health (::1) 0.61ms
+2026-02-27 23:26:36.822 304 GET /_stcore/host-config (::1) 0.49ms
+2026-02-27 23:26:36.825 101 GET /_stcore/stream (::1) 0.72ms
+2026-02-27 23:26:37.076 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-27 23:26:37.083 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-27 23:26:41.477 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-27 23:26:41.480 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-27 23:26:41.482 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-27 23:26:41.482 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-27 23:26:56.775 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-27 23:26:56.778 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-27 23:26:56.779 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-27 23:26:56.779 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-27 23:27:46.599 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-27 23:27:46.602 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-27 23:27:46.603 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-27 23:27:46.604 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-27 23:27:50.742 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-27 23:27:50.745 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-27 23:27:50.745 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-27 23:27:50.746 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-28 00:06:56.824 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-28 00:06:56.828 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-28 00:06:56.828 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-28 00:06:56.829 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-28 00:07:04.825 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-28 00:07:04.827 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-28 00:07:04.828 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-28 00:07:04.828 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-28 00:08:14.421 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-28 00:08:14.425 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-28 00:08:14.426 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-28 00:08:14.427 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-28 00:08:33.157 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-28 00:08:33.159 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-28 00:08:33.160 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-28 00:08:33.161 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-28 00:09:54.283 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-28 00:09:54.285 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-28 00:09:54.286 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-28 00:09:54.287 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-28 00:32:20.742 304 GET / (::1) 4.68ms
+2026-02-28 00:32:20.904 304 GET /_stcore/health (::1) 1.57ms
+2026-02-28 00:32:20.905 304 GET /_stcore/host-config (::1) 0.60ms
+2026-02-28 00:32:20.908 101 GET /_stcore/stream (::1) 1.22ms
+2026-02-28 00:32:21.258 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-28 00:32:21.264 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-28 00:32:22.951 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-28 00:32:22.954 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-28 00:32:22.956 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-28 00:32:22.956 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-28 00:32:31.539 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-28 00:32:31.542 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-28 00:32:31.543 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-28 00:32:31.544 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-28 00:32:49.636 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-28 00:32:49.637 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-28 00:32:49.638 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-28 00:32:49.639 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-28 00:32:52.024 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-28 00:32:52.026 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-28 00:32:52.027 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-28 00:32:52.028 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-28 00:32:56.816 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-28 00:32:56.819 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-28 00:32:56.820 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-28 00:32:56.820 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-28 00:32:59.652 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-28 00:32:59.654 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-28 00:32:59.655 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-28 00:32:59.656 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-28 00:46:00.695 304 GET / (::1) 4.10ms
+2026-02-28 00:46:00.848 304 GET /_stcore/health (::1) 0.92ms
+2026-02-28 00:46:00.849 304 GET /_stcore/host-config (::1) 0.65ms
+2026-02-28 00:46:00.852 101 GET /_stcore/stream (::1) 1.19ms
+2026-02-28 00:46:01.175 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-28 00:46:01.182 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-28 00:46:02.947 Uncaught app execution
+Traceback (most recent call last):
+  File "/Users/shinsukeimanaka/.gemini/antigravity/applicaiton_develop/Dinamic_Priceing/backend/venv/lib/python3.14/site-packages/streamlit/runtime/scriptrunner/exec_code.py", line 129, in exec_func_with_error_handling
+    result = func()
+  File "/Users/shinsukeimanaka/.gemini/antigravity/applicaiton_develop/Dinamic_Priceing/backend/venv/lib/python3.14/site-packages/streamlit/runtime/scriptrunner/script_runner.py", line 689, in code_to_exec
+    exec(code, module.__dict__)  # noqa: S102
+    ~~~~^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/shinsukeimanaka/.gemini/antigravity/applicaiton_develop/Dinamic_Priceing/backend/dashboard/app.py", line 1052, in <module>
+    h_pricing_rule = calc_optimal_price(target_hotel, inventory_metrics[target_hotel["id"]], strategy="rule_based", reference_date=v_today)
+                     ^^^^^^^^^^^^^^^^^^
+NameError: name 'calc_optimal_price' is not defined
+2026-02-28 00:52:43.184 304 GET / (::1) 4.72ms
+2026-02-28 00:52:43.308 304 GET /_stcore/health (::1) 1.26ms
+2026-02-28 00:52:43.310 304 GET /_stcore/host-config (::1) 0.82ms
+2026-02-28 00:52:43.313 101 GET /_stcore/stream (::1) 1.08ms
+2026-02-28 00:52:43.616 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-28 00:52:43.622 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-28 00:52:45.533 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-28 00:52:45.535 Uncaught app execution
+Traceback (most recent call last):
+  File "/Users/shinsukeimanaka/.gemini/antigravity/applicaiton_develop/Dinamic_Priceing/backend/venv/lib/python3.14/site-packages/streamlit/runtime/scriptrunner/exec_code.py", line 129, in exec_func_with_error_handling
+    result = func()
+  File "/Users/shinsukeimanaka/.gemini/antigravity/applicaiton_develop/Dinamic_Priceing/backend/venv/lib/python3.14/site-packages/streamlit/runtime/scriptrunner/script_runner.py", line 689, in code_to_exec
+    exec(code, module.__dict__)  # noqa: S102
+    ~~~~^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/shinsukeimanaka/.gemini/antigravity/applicaiton_develop/Dinamic_Priceing/backend/dashboard/app.py", line 1497, in <module>
+    シナリオAでは <b>{int(curr_a_h_stock)}個</b> の売れ残りが発生し、仕入原価 <b>¥{int(curr_a_h_stock * h_cost):,}</b> が丸損となる予測です。<br>
+                          ^^^^^^^^^^^^^^
+NameError: name 'curr_a_h_stock' is not defined. Did you mean: 'curr_b_h_stock'?
+2026-02-28 00:52:57.812 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-28 00:52:57.813 Uncaught app execution
+Traceback (most recent call last):
+  File "/Users/shinsukeimanaka/.gemini/antigravity/applicaiton_develop/Dinamic_Priceing/backend/venv/lib/python3.14/site-packages/streamlit/runtime/scriptrunner/exec_code.py", line 129, in exec_func_with_error_handling
+    result = func()
+  File "/Users/shinsukeimanaka/.gemini/antigravity/applicaiton_develop/Dinamic_Priceing/backend/venv/lib/python3.14/site-packages/streamlit/runtime/scriptrunner/script_runner.py", line 689, in code_to_exec
+    exec(code, module.__dict__)  # noqa: S102
+    ~~~~^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/shinsukeimanaka/.gemini/antigravity/applicaiton_develop/Dinamic_Priceing/backend/dashboard/app.py", line 1497, in <module>
+    シナリオAでは <b>{int(curr_a_h_stock)}個</b> の売れ残りが発生し、仕入原価 <b>¥{int(curr_a_h_stock * h_cost):,}</b> が丸損となる予測です。<br>
+                          ^^^^^^^^^^^^^^
+NameError: name 'curr_a_h_stock' is not defined. Did you mean: 'curr_b_h_stock'?
+2026-02-28 00:52:59.924 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-28 00:52:59.926 Uncaught app execution
+Traceback (most recent call last):
+  File "/Users/shinsukeimanaka/.gemini/antigravity/applicaiton_develop/Dinamic_Priceing/backend/venv/lib/python3.14/site-packages/streamlit/runtime/scriptrunner/exec_code.py", line 129, in exec_func_with_error_handling
+    result = func()
+  File "/Users/shinsukeimanaka/.gemini/antigravity/applicaiton_develop/Dinamic_Priceing/backend/venv/lib/python3.14/site-packages/streamlit/runtime/scriptrunner/script_runner.py", line 689, in code_to_exec
+    exec(code, module.__dict__)  # noqa: S102
+    ~~~~^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/shinsukeimanaka/.gemini/antigravity/applicaiton_develop/Dinamic_Priceing/backend/dashboard/app.py", line 1497, in <module>
+    シナリオAでは <b>{int(curr_a_h_stock)}個</b> の売れ残りが発生し、仕入原価 <b>¥{int(curr_a_h_stock * h_cost):,}</b> が丸損となる予測です。<br>
+                          ^^^^^^^^^^^^^^
+NameError: name 'curr_a_h_stock' is not defined. Did you mean: 'curr_b_h_stock'?
+2026-02-28 01:04:32.072 304 GET / (::1) 3.48ms
+2026-02-28 01:04:32.205 304 GET /_stcore/health (::1) 0.81ms
+2026-02-28 01:04:32.206 304 GET /_stcore/host-config (::1) 0.50ms
+2026-02-28 01:04:32.209 101 GET /_stcore/stream (::1) 1.24ms
+2026-02-28 01:04:32.526 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-28 01:04:32.532 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-28 01:04:34.231 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-28 01:04:34.233 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-28 01:04:34.234 Uncaught app execution
+Traceback (most recent call last):
+  File "/Users/shinsukeimanaka/.gemini/antigravity/applicaiton_develop/Dinamic_Priceing/backend/venv/lib/python3.14/site-packages/streamlit/runtime/scriptrunner/exec_code.py", line 129, in exec_func_with_error_handling
+    result = func()
+  File "/Users/shinsukeimanaka/.gemini/antigravity/applicaiton_develop/Dinamic_Priceing/backend/venv/lib/python3.14/site-packages/streamlit/runtime/scriptrunner/script_runner.py", line 689, in code_to_exec
+    exec(code, module.__dict__)  # noqa: S102
+    ~~~~^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/shinsukeimanaka/.gemini/antigravity/applicaiton_develop/Dinamic_Priceing/backend/dashboard/app.py", line 1537, in <module>
+    "合計販売数": f"{int(total_sold_b_pkg + total_sold_b_h_solo)}室",
+                                            ^^^^^^^^^^^^^^^^^^^
+NameError: name 'total_sold_b_h_solo' is not defined. Did you mean: 'total_sold_sel_h_solo'?
+2026-02-28 01:05:22.812 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-28 01:05:22.815 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-28 01:05:22.815 Uncaught app execution
+Traceback (most recent call last):
+  File "/Users/shinsukeimanaka/.gemini/antigravity/applicaiton_develop/Dinamic_Priceing/backend/venv/lib/python3.14/site-packages/streamlit/runtime/scriptrunner/exec_code.py", line 129, in exec_func_with_error_handling
+    result = func()
+  File "/Users/shinsukeimanaka/.gemini/antigravity/applicaiton_develop/Dinamic_Priceing/backend/venv/lib/python3.14/site-packages/streamlit/runtime/scriptrunner/script_runner.py", line 689, in code_to_exec
+    exec(code, module.__dict__)  # noqa: S102
+    ~~~~^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/shinsukeimanaka/.gemini/antigravity/applicaiton_develop/Dinamic_Priceing/backend/dashboard/app.py", line 1537, in <module>
+    "合計販売数": f"{int(total_sold_b_pkg + total_sold_b_h_solo)}室",
+                                            ^^^^^^^^^^^^^^^^^^^
+NameError: name 'total_sold_b_h_solo' is not defined. Did you mean: 'total_sold_sel_h_solo'?
+2026-02-28 01:09:55.626 304 GET / (::1) 3.83ms
+2026-02-28 01:09:55.768 304 GET /_stcore/host-config (::1) 0.84ms
+2026-02-28 01:09:55.770 304 GET /_stcore/health (::1) 0.75ms
+2026-02-28 01:09:55.773 101 GET /_stcore/stream (::1) 1.16ms
+2026-02-28 01:09:56.147 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-28 01:09:56.154 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-28 01:09:58.151 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-28 01:09:58.153 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-28 01:09:58.155 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-28 01:09:58.155 Uncaught app execution
+Traceback (most recent call last):
+  File "/Users/shinsukeimanaka/.gemini/antigravity/applicaiton_develop/Dinamic_Priceing/backend/venv/lib/python3.14/site-packages/streamlit/runtime/scriptrunner/exec_code.py", line 129, in exec_func_with_error_handling
+    result = func()
+  File "/Users/shinsukeimanaka/.gemini/antigravity/applicaiton_develop/Dinamic_Priceing/backend/venv/lib/python3.14/site-packages/streamlit/runtime/scriptrunner/script_runner.py", line 689, in code_to_exec
+    exec(code, module.__dict__)  # noqa: S102
+    ~~~~^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/shinsukeimanaka/.gemini/antigravity/applicaiton_develop/Dinamic_Priceing/backend/dashboard/app.py", line 1563, in <module>
+    {"パラメータ名": "ホテルの価格弾力性", "現在値": f"{h_item_sim['elasticity']}", "説明": "価格変更に対する需要の敏感さ（負の数値が小さいほど値上げに強い）"},
+                                                        ^^^^^^^^^^
+NameError: name 'h_item_sim' is not defined
+2026-02-28 01:11:05.740 304 GET / (::1) 1.02ms
+2026-02-28 01:11:05.831 304 GET /_stcore/host-config (::1) 0.48ms
+2026-02-28 01:11:05.832 304 GET /_stcore/health (::1) 0.49ms
+2026-02-28 01:11:05.834 101 GET /_stcore/stream (::1) 0.79ms
+2026-02-28 01:11:06.134 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-28 01:11:06.141 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-28 01:11:09.888 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-28 01:11:09.890 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-28 01:11:09.891 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-28 01:11:09.892 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-28 01:11:16.182 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-28 01:11:16.185 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-28 01:11:16.186 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-28 01:11:16.187 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-28 07:51:23.824 304 GET / (::1) 2.71ms
+2026-02-28 07:51:23.966 304 GET /_stcore/health (::1) 1.16ms
+2026-02-28 07:51:23.967 304 GET /_stcore/host-config (::1) 1.15ms
+2026-02-28 07:51:23.971 101 GET /_stcore/stream (::1) 1.42ms
+2026-02-28 07:51:24.315 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-28 07:51:24.322 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-28 07:51:26.782 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-28 07:51:26.784 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-28 07:51:26.785 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-28 07:51:26.785 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-28 07:51:33.650 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-28 07:51:33.652 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-28 07:51:33.653 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-28 07:51:33.654 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-28 07:51:41.626 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-28 07:51:41.628 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-28 07:51:41.629 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-28 07:51:41.629 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-28 07:51:45.605 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-28 07:51:45.607 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-28 07:51:45.608 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-02-28 07:51:45.609 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-03-02 20:10:08.560 304 GET / (::1) 1.24ms
+2026-03-02 20:10:08.715 304 GET /_stcore/health (::1) 1.63ms
+2026-03-02 20:10:08.716 304 GET /_stcore/host-config (::1) 0.42ms
+2026-03-02 20:10:08.725 101 GET /_stcore/stream (::1) 1.77ms
+2026-03-02 20:10:09.012 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-03-02 20:10:09.018 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-03-02 20:10:12.507 Uncaught app execution
+Traceback (most recent call last):
+  File "/Users/shinsukeimanaka/.gemini/antigravity/applicaiton_develop/Dinamic_Priceing/backend/venv/lib/python3.14/site-packages/streamlit/runtime/scriptrunner/exec_code.py", line 129, in exec_func_with_error_handling
+    result = func()
+  File "/Users/shinsukeimanaka/.gemini/antigravity/applicaiton_develop/Dinamic_Priceing/backend/venv/lib/python3.14/site-packages/streamlit/runtime/scriptrunner/script_runner.py", line 689, in code_to_exec
+    exec(code, module.__dict__)  # noqa: S102
+    ~~~~^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/shinsukeimanaka/.gemini/antigravity/applicaiton_develop/Dinamic_Priceing/backend/dashboard/app.py", line 1146, in <module>
+    history_selected = h_item_sim_demand["history"] if is_hybrid else h_item_sim_rule["history"]
+                                                                      ~~~~~~~~~~~~~~~^^^^^^^^^^^
+KeyError: 'history'
+2026-03-02 20:10:18.363 Uncaught app execution
+Traceback (most recent call last):
+  File "/Users/shinsukeimanaka/.gemini/antigravity/applicaiton_develop/Dinamic_Priceing/backend/venv/lib/python3.14/site-packages/streamlit/runtime/scriptrunner/exec_code.py", line 129, in exec_func_with_error_handling
+    result = func()
+  File "/Users/shinsukeimanaka/.gemini/antigravity/applicaiton_develop/Dinamic_Priceing/backend/venv/lib/python3.14/site-packages/streamlit/runtime/scriptrunner/script_runner.py", line 689, in code_to_exec
+    exec(code, module.__dict__)  # noqa: S102
+    ~~~~^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/shinsukeimanaka/.gemini/antigravity/applicaiton_develop/Dinamic_Priceing/backend/dashboard/app.py", line 1146, in <module>
+    history_selected = h_item_sim_demand["history"] if is_hybrid else h_item_sim_rule["history"]
+                                                                      ~~~~~~~~~~~~~~~^^^^^^^^^^^
+KeyError: 'history'
+DEBUG days_x: ['D-30', 'D-29', 'D-28', 'D-27', 'D-26', 'D-25', 'D-24', 'D-23', 'D-22', 'D-21'] ['D-4', 'D-3', 'D-2', 'D-1', 'D-0']
+DEBUG asset_value: [np.float64(588000.0), np.float64(587999.98619001), np.float64(587999.9592918237), np.float64(587999.9069013173), np.float64(587999.8048585692), np.float64(587999.6061065284), np.float64(587999.2189907662), np.float64(587998.4649935601), np.float64(587996.9964126241), np.float64(587994.1360268507)] [np.float64(309833.4923073854), np.float64(204036.37002943145), np.float64(110865.49418066832), np.float64(42962.87707129684), np.float64(0.0)]
+DEBUG days_x: ['D-30', 'D-29', 'D-28', 'D-27', 'D-26', 'D-25', 'D-24', 'D-23', 'D-22', 'D-21'] ['D-4', 'D-3', 'D-2', 'D-1', 'D-0']
+DEBUG asset_value: [np.float64(588000.0), np.float64(587999.98619001), np.float64(587999.9592918237), np.float64(587999.9069013173), np.float64(587999.8048585692), np.float64(587999.6061065284), np.float64(587999.2189907662), np.float64(587998.4649935601), np.float64(587996.9964126241), np.float64(587994.1360268507)] [np.float64(309833.4923073854), np.float64(204036.37002943145), np.float64(110865.49418066832), np.float64(42962.87707129684), np.float64(0.0)]
+DEBUG days_x: ['D-30', 'D-29', 'D-28', 'D-27', 'D-26', 'D-25', 'D-24', 'D-23', 'D-22', 'D-21'] ['D-4', 'D-3', 'D-2', 'D-1', 'D-0']
+DEBUG asset_value: [np.float64(588000.0), np.float64(587999.98619001), np.float64(587999.9592918237), np.float64(587999.9069013173), np.float64(587999.8048585692), np.float64(587999.6061065284), np.float64(587999.2189907662), np.float64(587998.4649935601), np.float64(587996.9964126241), np.float64(587994.1360268507)] [np.float64(309833.4923073854), np.float64(204036.37002943145), np.float64(110865.49418066832), np.float64(42962.87707129684), np.float64(0.0)]
+DEBUG days_x: ['D-30', 'D-29', 'D-28', 'D-27', 'D-26', 'D-25', 'D-24', 'D-23', 'D-22', 'D-21'] ['D-4', 'D-3', 'D-2', 'D-1', 'D-0']
+DEBUG asset_value: [np.float64(588000.0), np.float64(587999.98619001), np.float64(587999.9592918237), np.float64(587999.9069013173), np.float64(587999.8048585692), np.float64(587999.6061065284), np.float64(587999.2189907662), np.float64(587998.4649935601), np.float64(587996.9964126241), np.float64(587994.1360268507)] [np.float64(309833.4923073854), np.float64(204036.37002943145), np.float64(110865.49418066832), np.float64(42962.87707129684), np.float64(0.0)]
+DEBUG days_x: ['D-30', 'D-29', 'D-28', 'D-27', 'D-26', 'D-25', 'D-24', 'D-23', 'D-22', 'D-21'] ['D-4', 'D-3', 'D-2', 'D-1', 'D-0']
+DEBUG asset_value: [np.float64(588000.0), np.float64(587999.98619001), np.float64(587999.9592918237), np.float64(587999.9069013173), np.float64(587999.8048585692), np.float64(587999.6061065284), np.float64(587999.2189907662), np.float64(587998.4649935601), np.float64(587996.9964126241), np.float64(587994.1360268507)] [np.float64(309833.4923073854), np.float64(204036.37002943145), np.float64(110865.49418066832), np.float64(42962.87707129684), np.float64(0.0)]
+DEBUG days_x: ['D-30', 'D-29', 'D-28', 'D-27', 'D-26', 'D-25', 'D-24', 'D-23', 'D-22', 'D-21'] ['D-4', 'D-3', 'D-2', 'D-1', 'D-0']
+DEBUG asset_value: [np.float64(588000.0), np.float64(587999.98619001), np.float64(587999.9592918237), np.float64(587999.9069013173), np.float64(587999.8048585692), np.float64(587999.6061065284), np.float64(587999.2189907662), np.float64(587998.4649935601), np.float64(587996.9964126241), np.float64(587994.1360268507)] [np.float64(309833.4923073854), np.float64(204036.37002943145), np.float64(110865.49418066832), np.float64(42962.87707129684), np.float64(0.0)]
+DEBUG days_x: ['D-9', 'D-8', 'D-7', 'D-6', 'D-5', 'D-4', 'D-3', 'D-2', 'D-1', 'D-0'] ['D-4', 'D-3', 'D-2', 'D-1', 'D-0']
+DEBUG asset_value: [np.float64(588000.0), np.float64(587999.8801076978), np.float64(587998.7737659052), np.float64(587988.5648293535), np.float64(587894.3739933411), np.float64(587026.5022983209), np.float64(579127.4358364302), np.float64(514492.61737516), np.float64(238899.6678132378), np.float64(0.0)] [np.float64(587026.5022983209), np.float64(579127.4358364302), np.float64(514492.61737516), np.float64(238899.6678132378), np.float64(0.0)]
+DEBUG days_x: ['D-30', 'D-29', 'D-28', 'D-27', 'D-26', 'D-25', 'D-24', 'D-23', 'D-22', 'D-21'] ['D-4', 'D-3', 'D-2', 'D-1', 'D-0']
+DEBUG asset_value: [np.float64(588000.0), np.float64(587999.98619001), np.float64(587999.9592918237), np.float64(587999.9069013173), np.float64(587999.8048585692), np.float64(587999.6061065284), np.float64(587999.2189907662), np.float64(587998.4649935601), np.float64(587996.9964126241), np.float64(587994.1360268507)] [np.float64(309833.4923073854), np.float64(204036.37002943145), np.float64(110865.49418066832), np.float64(42962.87707129684), np.float64(0.0)]
+DEBUG days_x: ['D-9', 'D-8', 'D-7', 'D-6', 'D-5', 'D-4', 'D-3', 'D-2', 'D-1', 'D-0'] ['D-4', 'D-3', 'D-2', 'D-1', 'D-0']
+DEBUG asset_value: [np.float64(588000.0), np.float64(587999.8801076978), np.float64(587998.7737659052), np.float64(587988.5648293535), np.float64(587894.3739933411), np.float64(587026.5022983209), np.float64(579127.4358364302), np.float64(514492.61737516), np.float64(238899.6678132378), np.float64(0.0)] [np.float64(587026.5022983209), np.float64(579127.4358364302), np.float64(514492.61737516), np.float64(238899.6678132378), np.float64(0.0)]
+DEBUG days_x: ['D-9', 'D-8', 'D-7', 'D-6', 'D-5', 'D-4', 'D-3', 'D-2', 'D-1', 'D-0'] ['D-4', 'D-3', 'D-2', 'D-1', 'D-0']
+DEBUG asset_value: [np.float64(588000.0), np.float64(587999.8801076978), np.float64(587998.7737659052), np.float64(587988.5648293535), np.float64(587894.3739933411), np.float64(587026.5022983209), np.float64(579127.4358364302), np.float64(514492.61737516), np.float64(238899.6678132378), np.float64(0.0)] [np.float64(587026.5022983209), np.float64(579127.4358364302), np.float64(514492.61737516), np.float64(238899.6678132378), np.float64(0.0)]
+DEBUG days_x: ['D-9', 'D-8', 'D-7', 'D-6', 'D-5', 'D-4', 'D-3', 'D-2', 'D-1', 'D-0'] ['D-4', 'D-3', 'D-2', 'D-1', 'D-0']
+DEBUG asset_value: [np.float64(588000.0), np.float64(587999.8801076978), np.float64(587998.7737659052), np.float64(587988.5648293535), np.float64(587894.3739933411), np.float64(587026.5022983209), np.float64(579127.4358364302), np.float64(514492.61737516), np.float64(238899.6678132378), np.float64(0.0)] [np.float64(587026.5022983209), np.float64(579127.4358364302), np.float64(514492.61737516), np.float64(238899.6678132378), np.float64(0.0)]
+DEBUG days_x: ['D-30', 'D-29', 'D-28', 'D-27', 'D-26', 'D-25', 'D-24', 'D-23', 'D-22', 'D-21'] ['D-4', 'D-3', 'D-2', 'D-1', 'D-0']
+DEBUG asset_value: [np.float64(588000.0), np.float64(587999.98619001), np.float64(587999.9592918237), np.float64(587999.9069013173), np.float64(587999.8048585692), np.float64(587999.6061065284), np.float64(587999.2189907662), np.float64(587998.4649935601), np.float64(587996.9964126241), np.float64(587994.1360268507)] [np.float64(309833.4923073854), np.float64(204036.37002943145), np.float64(110865.49418066832), np.float64(42962.87707129684), np.float64(0.0)]
+DEBUG days_x: ['D-2', 'D-1', 'D-0'] ['D-2', 'D-1', 'D-0']
+DEBUG asset_value: [np.float64(588000.0), np.float64(587679.2145069237), np.float64(0.0)] [np.float64(588000.0), np.float64(587679.2145069237), np.float64(0.0)]
+DEBUG days_x: ['D-30', 'D-29', 'D-28', 'D-27', 'D-26', 'D-25', 'D-24', 'D-23', 'D-22', 'D-21'] ['D-4', 'D-3', 'D-2', 'D-1', 'D-0']
+DEBUG asset_value: [np.float64(588000.0), np.float64(587999.98619001), np.float64(587999.9592918237), np.float64(587999.9069013173), np.float64(587999.8048585692), np.float64(587999.6061065284), np.float64(587999.2189907662), np.float64(587998.4649935601), np.float64(587996.9964126241), np.float64(587994.1360268507)] [np.float64(309833.4923073854), np.float64(204036.37002943145), np.float64(110865.49418066832), np.float64(42962.87707129684), np.float64(0.0)]
+DEBUG days_x: ['D-30', 'D-29', 'D-28', 'D-27', 'D-26', 'D-25', 'D-24', 'D-23', 'D-22', 'D-21'] ['D-4', 'D-3', 'D-2', 'D-1', 'D-0']
+DEBUG asset_value: [np.float64(588000.0), np.float64(587999.98619001), np.float64(587999.9592918237), np.float64(587999.9069013173), np.float64(587999.8048585692), np.float64(587999.6061065284), np.float64(587999.2189907662), np.float64(587998.4649935601), np.float64(587996.9964126241), np.float64(587994.1360268507)] [np.float64(309833.4923073854), np.float64(204036.37002943145), np.float64(110865.49418066832), np.float64(42962.87707129684), np.float64(0.0)]
+DEBUG days_x: ['D-9', 'D-8', 'D-7', 'D-6', 'D-5', 'D-4', 'D-3', 'D-2', 'D-1', 'D-0'] ['D-4', 'D-3', 'D-2', 'D-1', 'D-0']
+DEBUG asset_value: [np.float64(588000.0), np.float64(587999.8801076978), np.float64(587998.7737659052), np.float64(587988.5648293535), np.float64(587894.3739933411), np.float64(587026.5022983209), np.float64(579127.4358364302), np.float64(514492.61737516), np.float64(238899.6678132378), np.float64(0.0)] [np.float64(587026.5022983209), np.float64(579127.4358364302), np.float64(514492.61737516), np.float64(238899.6678132378), np.float64(0.0)]
+DEBUG days_x: ['D-30', 'D-29', 'D-28', 'D-27', 'D-26', 'D-25', 'D-24', 'D-23', 'D-22', 'D-21'] ['D-4', 'D-3', 'D-2', 'D-1', 'D-0']
+DEBUG asset_value: [np.float64(588000.0), np.float64(587999.98619001), np.float64(587999.9592918237), np.float64(587999.9069013173), np.float64(587999.8048585692), np.float64(587999.6061065284), np.float64(587999.2189907662), np.float64(587998.4649935601), np.float64(587996.9964126241), np.float64(587994.1360268507)] [np.float64(309833.4923073854), np.float64(204036.37002943145), np.float64(110865.49418066832), np.float64(42962.87707129684), np.float64(0.0)]
+DEBUG days_x: ['D-29', 'D-28', 'D-27', 'D-26', 'D-25', 'D-24', 'D-23', 'D-22', 'D-21', 'D-20'] ['D-4', 'D-3', 'D-2', 'D-1', 'D-0']
+DEBUG asset_value: [np.float64(756000.0), np.float64(755999.9813957175), np.float64(755999.9443168613), np.float64(755999.8704176664), np.float64(755999.7231345294), np.float64(755999.4295952461), np.float64(755998.8445638107), np.float64(755997.6785821593), np.float64(755995.3547577246), np.float64(755990.7233492447)] [np.float64(416854.47650417016), np.float64(276083.7123266748), np.float64(149843.50621182477), np.float64(57676.51451442624), np.float64(0.0)]
+DEBUG days_x: ['D-2', 'D-1', 'D-0'] ['D-2', 'D-1', 'D-0']
+DEBUG asset_value: [np.float64(588000.0), np.float64(587679.2145069237), np.float64(0.0)] [np.float64(588000.0), np.float64(587679.2145069237), np.float64(0.0)]
+DEBUG days_x: ['D-30', 'D-29', 'D-28', 'D-27', 'D-26', 'D-25', 'D-24', 'D-23', 'D-22', 'D-21'] ['D-4', 'D-3', 'D-2', 'D-1', 'D-0']
+DEBUG asset_value: [np.float64(588000.0), np.float64(587999.98619001), np.float64(587999.9592918237), np.float64(587999.9069013173), np.float64(587999.8048585692), np.float64(587999.6061065284), np.float64(587999.2189907662), np.float64(587998.4649935601), np.float64(587996.9964126241), np.float64(587994.1360268507)] [np.float64(309833.4923073854), np.float64(204036.37002943145), np.float64(110865.49418066832), np.float64(42962.87707129684), np.float64(0.0)]
+DEBUG days_x: ['D-30', 'D-29', 'D-28', 'D-27', 'D-26', 'D-25', 'D-24', 'D-23', 'D-22', 'D-21'] ['D-4', 'D-3', 'D-2', 'D-1', 'D-0']
+DEBUG asset_value: [np.float64(588000.0), np.float64(587999.98619001), np.float64(587999.9592918237), np.float64(587999.9069013173), np.float64(587999.8048585692), np.float64(587999.6061065284), np.float64(587999.2189907662), np.float64(587998.4649935601), np.float64(587996.9964126241), np.float64(587994.1360268507)] [np.float64(309833.4923073854), np.float64(204036.37002943145), np.float64(110865.49418066832), np.float64(42962.87707129684), np.float64(0.0)]
+DEBUG days_x: ['D-30', 'D-29', 'D-28', 'D-27', 'D-26', 'D-25', 'D-24', 'D-23', 'D-22', 'D-21'] ['D-4', 'D-3', 'D-2', 'D-1', 'D-0']
+DEBUG asset_value: [np.float64(588000.0), np.float64(587999.98619001), np.float64(587999.9592918237), np.float64(587999.9069013173), np.float64(587999.8048585692), np.float64(587999.6061065284), np.float64(587999.2189907662), np.float64(587998.4649935601), np.float64(587996.9964126241), np.float64(587994.1360268507)] [np.float64(309833.4923073854), np.float64(204036.37002943145), np.float64(110865.49418066832), np.float64(42962.87707129684), np.float64(0.0)]
+DEBUG days_x: ['D-30', 'D-29', 'D-28', 'D-27', 'D-26', 'D-25', 'D-24', 'D-23', 'D-22', 'D-21'] ['D-4', 'D-3', 'D-2', 'D-1', 'D-0']
+DEBUG asset_value: [np.float64(588000.0), np.float64(587999.98619001), np.float64(587999.9592918237), np.float64(587999.9069013173), np.float64(587999.8048585692), np.float64(587999.6061065284), np.float64(587999.2189907662), np.float64(587998.4649935601), np.float64(587996.9964126241), np.float64(587994.1360268507)] [np.float64(309833.4923073854), np.float64(204036.37002943145), np.float64(110865.49418066832), np.float64(42962.87707129684), np.float64(0.0)]
+DEBUG days_x: ['D-30', 'D-29', 'D-28', 'D-27', 'D-26', 'D-25', 'D-24', 'D-23', 'D-22', 'D-21'] ['D-4', 'D-3', 'D-2', 'D-1', 'D-0']
+DEBUG asset_value: [np.float64(588000.0), np.float64(587999.98619001), np.float64(587999.9592918237), np.float64(587999.9069013173), np.float64(587999.8048585692), np.float64(587999.6061065284), np.float64(587999.2189907662), np.float64(587998.4649935601), np.float64(587996.9964126241), np.float64(587994.1360268507)] [np.float64(309833.4923073854), np.float64(204036.37002943145), np.float64(110865.49418066832), np.float64(42962.87707129684), np.float64(0.0)]
+DEBUG days_x: ['D-30', 'D-29', 'D-28', 'D-27', 'D-26', 'D-25', 'D-24', 'D-23', 'D-22', 'D-21'] ['D-4', 'D-3', 'D-2', 'D-1', 'D-0']
+DEBUG asset_value: [np.float64(588000.0), np.float64(587999.98619001), np.float64(587999.9592918237), np.float64(587999.9069013173), np.float64(587999.8048585692), np.float64(587999.6061065284), np.float64(587999.2189907662), np.float64(587998.4649935601), np.float64(587996.9964126241), np.float64(587994.1360268507)] [np.float64(309833.4923073854), np.float64(204036.37002943145), np.float64(110865.49418066832), np.float64(42962.87707129684), np.float64(0.0)]
+DEBUG days_x: ['D-30', 'D-29', 'D-28', 'D-27', 'D-26', 'D-25', 'D-24', 'D-23', 'D-22', 'D-21'] ['D-4', 'D-3', 'D-2', 'D-1', 'D-0']
+DEBUG asset_value: [np.float64(588000.0), np.float64(587999.98619001), np.float64(587999.9592918237), np.float64(587999.9069013173), np.float64(587999.8048585692), np.float64(587999.6061065284), np.float64(587999.2189907662), np.float64(587998.4649935601), np.float64(587996.9964126241), np.float64(587994.1360268507)] [np.float64(309833.4923073854), np.float64(204036.37002943145), np.float64(110865.49418066832), np.float64(42962.87707129684), np.float64(0.0)]
+DEBUG days_x: ['D-30', 'D-29', 'D-28', 'D-27', 'D-26', 'D-25', 'D-24', 'D-23', 'D-22', 'D-21'] ['D-4', 'D-3', 'D-2', 'D-1', 'D-0']
+DEBUG asset_value: [np.float64(588000.0), np.float64(587999.98619001), np.float64(587999.9592918237), np.float64(587999.9069013173), np.float64(587999.8048585692), np.float64(587999.6061065284), np.float64(587999.2189907662), np.float64(587998.4649935601), np.float64(587996.9964126241), np.float64(587994.1360268507)] [np.float64(309833.4923073854), np.float64(204036.37002943145), np.float64(110865.49418066832), np.float64(42962.87707129684), np.float64(0.0)]
+DEBUG days_x: ['D-9', 'D-8', 'D-7', 'D-6', 'D-5', 'D-4', 'D-3', 'D-2', 'D-1', 'D-0'] ['D-4', 'D-3', 'D-2', 'D-1', 'D-0']
+DEBUG asset_value: [np.float64(588000.0), np.float64(587999.8801076978), np.float64(587998.7737659052), np.float64(587988.5648293535), np.float64(587894.3739933411), np.float64(587026.5022983209), np.float64(579127.4358364302), np.float64(514492.61737516), np.float64(238899.6678132378), np.float64(0.0)] [np.float64(587026.5022983209), np.float64(579127.4358364302), np.float64(514492.61737516), np.float64(238899.6678132378), np.float64(0.0)]
+DEBUG days_x: ['D-30', 'D-29', 'D-28', 'D-27', 'D-26', 'D-25', 'D-24', 'D-23', 'D-22', 'D-21'] ['D-4', 'D-3', 'D-2', 'D-1', 'D-0']
+DEBUG asset_value: [np.float64(588000.0), np.float64(587999.98619001), np.float64(587999.9592918237), np.float64(587999.9069013173), np.float64(587999.8048585692), np.float64(587999.6061065284), np.float64(587999.2189907662), np.float64(587998.4649935601), np.float64(587996.9964126241), np.float64(587994.1360268507)] [np.float64(309833.4923073854), np.float64(204036.37002943145), np.float64(110865.49418066832), np.float64(42962.87707129684), np.float64(0.0)]
+DEBUG days_x: ['D-30', 'D-29', 'D-28', 'D-27', 'D-26', 'D-25', 'D-24', 'D-23', 'D-22', 'D-21'] ['D-4', 'D-3', 'D-2', 'D-1', 'D-0']
+DEBUG asset_value: [np.float64(588000.0), np.float64(587999.98619001), np.float64(587999.9592918237), np.float64(587999.9069013173), np.float64(587999.8048585692), np.float64(587999.6061065284), np.float64(587999.2189907662), np.float64(587998.4649935601), np.float64(587996.9964126241), np.float64(587994.1360268507)] [np.float64(309833.4923073854), np.float64(204036.37002943145), np.float64(110865.49418066832), np.float64(42962.87707129684), np.float64(0.0)]
+DEBUG days_x: ['D-2', 'D-1', 'D-0'] ['D-2', 'D-1', 'D-0']
+DEBUG asset_value: [np.float64(588000.0), np.float64(587679.2145069237), np.float64(0.0)] [np.float64(588000.0), np.float64(587679.2145069237), np.float64(0.0)]
+DEBUG days_x: ['D-2', 'D-1', 'D-0'] ['D-2', 'D-1', 'D-0']
+DEBUG asset_value: [np.float64(346489.0), np.float64(346299.9716926692), np.float64(0.0)] [np.float64(346489.0), np.float64(346299.9716926692), np.float64(0.0)]
+DEBUG days_x: ['D-2', 'D-1', 'D-0'] ['D-2', 'D-1', 'D-0']
+DEBUG asset_value: [np.float64(346489.0), np.float64(346299.9716926692), np.float64(0.0)] [np.float64(346489.0), np.float64(346299.9716926692), np.float64(0.0)]
+DEBUG days_x: ['D-2', 'D-1', 'D-0'] ['D-2', 'D-1', 'D-0']
+DEBUG asset_value: [np.float64(346489.0), np.float64(346299.9716926692), np.float64(0.0)] [np.float64(346489.0), np.float64(346299.9716926692), np.float64(0.0)]
+DEBUG days_x: ['D-2', 'D-1', 'D-0'] ['D-2', 'D-1', 'D-0']
+DEBUG asset_value: [np.float64(346489.0), np.float64(346299.9716926692), np.float64(0.0)] [np.float64(346489.0), np.float64(346299.9716926692), np.float64(0.0)]
+DEBUG days_x: ['D-1', 'D-0'] ['D-1', 'D-0']
+DEBUG asset_value: [np.float64(504000.0), np.float64(0.0)] [np.float64(504000.0), np.float64(0.0)]
+DEBUG days_x: ['D-1', 'D-0'] ['D-1', 'D-0']
+DEBUG asset_value: [np.float64(504000.0), np.float64(0.0)] [np.float64(504000.0), np.float64(0.0)]
+DEBUG days_x: ['D-9', 'D-8', 'D-7', 'D-6', 'D-5', 'D-4', 'D-3', 'D-2', 'D-1', 'D-0'] ['D-4', 'D-3', 'D-2', 'D-1', 'D-0']
+DEBUG asset_value: [np.float64(588000.0), np.float64(587999.8801076978), np.float64(587998.7737659052), np.float64(587988.5648293535), np.float64(587894.3739933411), np.float64(587026.5022983209), np.float64(579127.4358364302), np.float64(514492.61737516), np.float64(238899.6678132378), np.float64(0.0)] [np.float64(587026.5022983209), np.float64(579127.4358364302), np.float64(514492.61737516), np.float64(238899.6678132378), np.float64(0.0)]
+DEBUG days_x: ['D-1', 'D-0'] ['D-1', 'D-0']
+DEBUG asset_value: [np.float64(504000.0), np.float64(0.0)] [np.float64(504000.0), np.float64(0.0)]
+DEBUG days_x: ['D-1', 'D-0'] ['D-1', 'D-0']
+DEBUG asset_value: [np.float64(504000.0), np.float64(0.0)] [np.float64(504000.0), np.float64(0.0)]
+DEBUG days_x: ['D-1', 'D-0'] ['D-1', 'D-0']
+DEBUG asset_value: [np.float64(504000.0), np.float64(0.0)] [np.float64(504000.0), np.float64(0.0)]
+DEBUG days_x: ['D-25', 'D-24', 'D-23', 'D-22', 'D-21', 'D-20', 'D-19', 'D-18', 'D-17', 'D-16'] ['D-4', 'D-3', 'D-2', 'D-1', 'D-0']
+DEBUG asset_value: [np.float64(588000.0), np.float64(587999.9821419225), np.float64(587999.9423980435), np.float64(587999.8539464319), np.float64(587999.6570938377), np.float64(587999.2189907662), np.float64(587998.243976598), np.float64(587996.0740533016), np.float64(587991.2448528967), np.float64(587980.4975307757)] [np.float64(389167.5747899568), np.float64(267328.9283577547), np.float64(145490.28192555276), np.float64(54391.5359500375), np.float64(0.0)]
+DEBUG days_x: ['D-25', 'D-24', 'D-23', 'D-22', 'D-21', 'D-20', 'D-19', 'D-18', 'D-17', 'D-16'] ['D-4', 'D-3', 'D-2', 'D-1', 'D-0']
+DEBUG asset_value: [np.float64(588000.0), np.float64(587999.9821419225), np.float64(587999.9423980435), np.float64(587999.8539464319), np.float64(587999.6570938377), np.float64(587999.2189907662), np.float64(587998.243976598), np.float64(587996.0740533016), np.float64(587991.2448528967), np.float64(587980.4975307757)] [np.float64(389167.5747899568), np.float64(267328.9283577547), np.float64(145490.28192555276), np.float64(54391.5359500375), np.float64(0.0)]
+DEBUG days_x: ['D-25', 'D-24', 'D-23', 'D-22', 'D-21', 'D-20', 'D-19', 'D-18', 'D-17', 'D-16'] ['D-4', 'D-3', 'D-2', 'D-1', 'D-0']
+DEBUG asset_value: [np.float64(588000.0), np.float64(587999.9821419225), np.float64(587999.9423980435), np.float64(587999.8539464319), np.float64(587999.6570938377), np.float64(587999.2189907662), np.float64(587998.243976598), np.float64(587996.0740533016), np.float64(587991.2448528967), np.float64(587980.4975307757)] [np.float64(389167.5747899568), np.float64(267328.9283577547), np.float64(145490.28192555276), np.float64(54391.5359500375), np.float64(0.0)]
+DEBUG days_x: ['D-45', 'D-44', 'D-43', 'D-42', 'D-41', 'D-40', 'D-39', 'D-38', 'D-37', 'D-36'] ['D-4', 'D-3', 'D-2', 'D-1', 'D-0']
+DEBUG asset_value: [np.float64(840000.0), np.float64(839999.9883505668), np.float64(839999.9701818379), np.float64(839999.9418454624), np.float64(839999.8976513891), np.float64(839999.8287252825), np.float64(839999.7212265275), np.float64(839999.5535689937), np.float64(839999.292086487), np.float64(839998.8842725232)] [np.float64(243804.86541528453), np.float64(158379.27740095474), np.float64(89422.78659702811), np.float64(37359.23277709863), np.float64(0.0)]
+DEBUG days_x: ['D-45', 'D-44', 'D-43', 'D-42', 'D-41', 'D-40', 'D-39', 'D-38', 'D-37', 'D-36'] ['D-4', 'D-3', 'D-2', 'D-1', 'D-0']
+DEBUG asset_value: [np.float64(840000.0), np.float64(839999.9883505668), np.float64(839999.9701818379), np.float64(839999.9418454624), np.float64(839999.8976513891), np.float64(839999.8287252825), np.float64(839999.7212265275), np.float64(839999.5535689937), np.float64(839999.292086487), np.float64(839998.8842725232)] [np.float64(243804.86541528453), np.float64(158379.27740095474), np.float64(89422.78659702811), np.float64(37359.23277709863), np.float64(0.0)]
+DEBUG days_x: ['D-45', 'D-44', 'D-43', 'D-42', 'D-41', 'D-40', 'D-39', 'D-38', 'D-37', 'D-36'] ['D-4', 'D-3', 'D-2', 'D-1', 'D-0']
+DEBUG asset_value: [np.float64(840000.0), np.float64(839999.9883505668), np.float64(839999.9701818379), np.float64(839999.9418454624), np.float64(839999.8976513891), np.float64(839999.8287252825), np.float64(839999.7212265275), np.float64(839999.5535689937), np.float64(839999.292086487), np.float64(839998.8842725232)] [np.float64(243804.86541528453), np.float64(158379.27740095474), np.float64(89422.78659702811), np.float64(37359.23277709863), np.float64(0.0)]
+DEBUG days_x: ['D-45', 'D-44', 'D-43', 'D-42', 'D-41', 'D-40', 'D-39', 'D-38', 'D-37', 'D-36'] ['D-4', 'D-3', 'D-2', 'D-1', 'D-0']
+DEBUG asset_value: [np.float64(840000.0), np.float64(839999.9883505668), np.float64(839999.9701818379), np.float64(839999.9418454624), np.float64(839999.8976513891), np.float64(839999.8287252825), np.float64(839999.7212265275), np.float64(839999.5535689937), np.float64(839999.292086487), np.float64(839998.8842725232)] [np.float64(243804.86541528453), np.float64(158379.27740095474), np.float64(89422.78659702811), np.float64(37359.23277709863), np.float64(0.0)]
+DEBUG days_x: ['D-45', 'D-44', 'D-43', 'D-42', 'D-41', 'D-40', 'D-39', 'D-38', 'D-37', 'D-36'] ['D-4', 'D-3', 'D-2', 'D-1', 'D-0']
+DEBUG asset_value: [np.float64(840000.0), np.float64(839999.9883505668), np.float64(839999.9701818379), np.float64(839999.9418454624), np.float64(839999.8976513891), np.float64(839999.8287252825), np.float64(839999.7212265275), np.float64(839999.5535689937), np.float64(839999.292086487), np.float64(839998.8842725232)] [np.float64(243804.86541528453), np.float64(158379.27740095474), np.float64(89422.78659702811), np.float64(37359.23277709863), np.float64(0.0)]
+DEBUG days_x: ['D-25', 'D-24', 'D-23', 'D-22', 'D-21', 'D-20', 'D-19', 'D-18', 'D-17', 'D-16'] ['D-4', 'D-3', 'D-2', 'D-1', 'D-0']
+DEBUG asset_value: [np.float64(588000.0), np.float64(587999.9821419225), np.float64(587999.9423980435), np.float64(587999.8539464319), np.float64(587999.6570938377), np.float64(587999.2189907662), np.float64(587998.243976598), np.float64(587996.0740533016), np.float64(587991.2448528967), np.float64(587980.4975307757)] [np.float64(389167.5747899568), np.float64(267328.9283577547), np.float64(145490.28192555276), np.float64(54391.5359500375), np.float64(0.0)]
+DEBUG days_x: ['D-45', 'D-44', 'D-43', 'D-42', 'D-41', 'D-40', 'D-39', 'D-38', 'D-37', 'D-36'] ['D-4', 'D-3', 'D-2', 'D-1', 'D-0']
+DEBUG asset_value: [np.float64(840000.0), np.float64(839999.9883505668), np.float64(839999.9701818379), np.float64(839999.9418454624), np.float64(839999.8976513891), np.float64(839999.8287252825), np.float64(839999.7212265275), np.float64(839999.5535689937), np.float64(839999.292086487), np.float64(839998.8842725232)] [np.float64(243804.86541528453), np.float64(158379.27740095474), np.float64(89422.78659702811), np.float64(37359.23277709863), np.float64(0.0)]
+DEBUG days_x: ['D-45', 'D-44', 'D-43', 'D-42', 'D-41', 'D-40', 'D-39', 'D-38', 'D-37', 'D-36'] ['D-4', 'D-3', 'D-2', 'D-1', 'D-0']
+DEBUG asset_value: [np.float64(840000.0), np.float64(839999.9883505668), np.float64(839999.9701818379), np.float64(839999.9418454624), np.float64(839999.8976513891), np.float64(839999.8287252825), np.float64(839999.7212265275), np.float64(839999.5535689937), np.float64(839999.292086487), np.float64(839998.8842725232)] [np.float64(243804.86541528453), np.float64(158379.27740095474), np.float64(89422.78659702811), np.float64(37359.23277709863), np.float64(0.0)]
+DEBUG days_x: ['D-45', 'D-44', 'D-43', 'D-42', 'D-41', 'D-40', 'D-39', 'D-38', 'D-37', 'D-36'] ['D-4', 'D-3', 'D-2', 'D-1', 'D-0']
+DEBUG asset_value: [np.float64(840000.0), np.float64(839999.9883505668), np.float64(839999.9701818379), np.float64(839999.9418454624), np.float64(839999.8976513891), np.float64(839999.8287252825), np.float64(839999.7212265275), np.float64(839999.5535689937), np.float64(839999.292086487), np.float64(839998.8842725232)] [np.float64(243804.86541528453), np.float64(158379.27740095474), np.float64(89422.78659702811), np.float64(37359.23277709863), np.float64(0.0)]
+DEBUG days_x: ['D-45', 'D-44', 'D-43', 'D-42', 'D-41', 'D-40', 'D-39', 'D-38', 'D-37', 'D-36'] ['D-4', 'D-3', 'D-2', 'D-1', 'D-0']
+DEBUG asset_value: [np.float64(840000.0), np.float64(839999.9883505668), np.float64(839999.9701818379), np.float64(839999.9418454624), np.float64(839999.8976513891), np.float64(839999.8287252825), np.float64(839999.7212265275), np.float64(839999.5535689937), np.float64(839999.292086487), np.float64(839998.8842725232)] [np.float64(243804.86541528453), np.float64(158379.27740095474), np.float64(89422.78659702811), np.float64(37359.23277709863), np.float64(0.0)]
+DEBUG days_x: ['D-45', 'D-44', 'D-43', 'D-42', 'D-41', 'D-40', 'D-39', 'D-38', 'D-37', 'D-36'] ['D-4', 'D-3', 'D-2', 'D-1', 'D-0']
+DEBUG asset_value: [np.float64(1511952.0), np.float64(1511951.979031686), np.float64(1511951.946329012), np.float64(1511951.8953251555), np.float64(1511951.815778349), np.float64(1511951.6917152957), np.float64(1511951.4982236794), np.float64(1511951.1964496989), np.float64(1511950.7257961289), np.float64(1511949.9917542976)] [np.float64(438834.826040917), np.float64(285073.6490772956), np.float64(160955.90600113076), np.float64(67244.48418547599), np.float64(0.0)]
+DEBUG days_x: ['D-45', 'D-44', 'D-43', 'D-42', 'D-41', 'D-40', 'D-39', 'D-38', 'D-37', 'D-36'] ['D-4', 'D-3', 'D-2', 'D-1', 'D-0']
+DEBUG asset_value: [np.float64(1511952.0), np.float64(1511951.979031686), np.float64(1511951.946329012), np.float64(1511951.8953251555), np.float64(1511951.815778349), np.float64(1511951.6917152957), np.float64(1511951.4982236794), np.float64(1511951.1964496989), np.float64(1511950.7257961289), np.float64(1511949.9917542976)] [np.float64(438834.826040917), np.float64(285073.6490772956), np.float64(160955.90600113076), np.float64(67244.48418547599), np.float64(0.0)]
+DEBUG days_x: ['D-25', 'D-24', 'D-23', 'D-22', 'D-21', 'D-20', 'D-19', 'D-18', 'D-17', 'D-16'] ['D-4', 'D-3', 'D-2', 'D-1', 'D-0']
+DEBUG asset_value: [np.float64(588000.0), np.float64(587999.9821419225), np.float64(587999.9423980435), np.float64(587999.8539464319), np.float64(587999.6570938377), np.float64(587999.2189907662), np.float64(587998.243976598), np.float64(587996.0740533016), np.float64(587991.2448528967), np.float64(587980.4975307757)] [np.float64(389167.5747899568), np.float64(267328.9283577547), np.float64(145490.28192555276), np.float64(54391.5359500375), np.float64(0.0)]
+DEBUG days_x: ['D-14', 'D-13', 'D-12', 'D-11', 'D-10', 'D-9', 'D-8', 'D-7', 'D-6', 'D-5'] ['D-4', 'D-3', 'D-2', 'D-1', 'D-0']
+DEBUG asset_value: [np.float64(504000.0), np.float64(503999.9603727694), np.float64(503999.79501894274), np.float64(503999.1050425015), np.float64(503996.22597311885), np.float64(503984.21270820894), np.float64(503934.0902167547), np.float64(503725.0410059346), np.float64(502854.4476787131), np.float64(499251.2724258755)] [np.float64(484713.38178025524), np.float64(431583.009571054), np.float64(290892.7266856741), np.float64(105229.4919590117), np.float64(0.0)]
+DEBUG days_x: ['D-14', 'D-13', 'D-12', 'D-11', 'D-10', 'D-9', 'D-8', 'D-7', 'D-6', 'D-5'] ['D-4', 'D-3', 'D-2', 'D-1', 'D-0']
+DEBUG asset_value: [np.float64(262500.0), np.float64(262499.9793608174), np.float64(262499.8932390327), np.float64(262499.5338763029), np.float64(262498.0343609994), np.float64(262491.77745219215), np.float64(262465.67198789306), np.float64(262356.79219059093), np.float64(261903.35816599644), np.float64(260026.7043884768)] [np.float64(252454.8863438829), np.float64(224782.81748492396), np.float64(151506.62848212195), np.float64(54807.02706198527), np.float64(0.0)]
+DEBUG days_x: ['D-14', 'D-13', 'D-12', 'D-11', 'D-10', 'D-9', 'D-8', 'D-7', 'D-6', 'D-5'] ['D-4', 'D-3', 'D-2', 'D-1', 'D-0']
+DEBUG asset_value: [np.float64(346489.0), np.float64(346488.97275714384), np.float64(346488.85907999694), np.float64(346488.3847362526), np.float64(346486.4054388889), np.float64(346478.1465814575), np.float64(346443.688462526), np.float64(346299.9716926692), np.float64(345701.4577812493), np.float64(343224.3534356531)] [np.float64(333229.87091202155), np.float64(296703.89960965264), np.float64(199982.40074720743), np.float64(72342.97904640081), np.float64(0.0)]
+DEBUG days_x: ['D-14', 'D-13', 'D-12', 'D-11', 'D-10', 'D-9', 'D-8', 'D-7', 'D-6', 'D-5'] ['D-4', 'D-3', 'D-2', 'D-1', 'D-0']
+DEBUG asset_value: [np.float64(743400.0), np.float64(743399.9415498348), np.float64(743399.6976529405), np.float64(743398.6799376898), np.float64(743394.4333103504), np.float64(743376.7137446082), np.float64(743302.7830697132), np.float64(742994.4354837536), np.float64(741710.310326102), np.float64(736395.6268281663)] [np.float64(714952.2381258764), np.float64(636584.9391173046), np.float64(429066.7718613693), np.float64(155213.50063954227), np.float64(0.0)]
+DEBUG days_x: ['D-14', 'D-13', 'D-12', 'D-11', 'D-10', 'D-9', 'D-8', 'D-7', 'D-6', 'D-5'] ['D-4', 'D-3', 'D-2', 'D-1', 'D-0']
+DEBUG asset_value: [np.float64(504000.0), np.float64(503999.9603727694), np.float64(503999.79501894274), np.float64(503999.1050425015), np.float64(503996.22597311885), np.float64(503984.21270820894), np.float64(503934.0902167547), np.float64(503725.0410059346), np.float64(502854.4476787131), np.float64(499251.2724258755)] [np.float64(484713.38178025524), np.float64(431583.009571054), np.float64(290892.7266856741), np.float64(105229.4919590117), np.float64(0.0)]
+DEBUG days_x: ['D-14', 'D-13', 'D-12', 'D-11', 'D-10', 'D-9', 'D-8', 'D-7', 'D-6', 'D-5'] ['D-4', 'D-3', 'D-2', 'D-1', 'D-0']
+DEBUG asset_value: [np.float64(504000.0), np.float64(503999.9603727694), np.float64(503999.79501894274), np.float64(503999.1050425015), np.float64(503996.22597311885), np.float64(503984.21270820894), np.float64(503934.0902167547), np.float64(503725.0410059346), np.float64(502854.4476787131), np.float64(499251.2724258755)] [np.float64(484713.38178025524), np.float64(431583.009571054), np.float64(290892.7266856741), np.float64(105229.4919590117), np.float64(0.0)]
+DEBUG days_x: ['D-14', 'D-13', 'D-12', 'D-11', 'D-10', 'D-9', 'D-8', 'D-7', 'D-6', 'D-5'] ['D-4', 'D-3', 'D-2', 'D-1', 'D-0']
+DEBUG asset_value: [np.float64(262500.0), np.float64(262499.9793608174), np.float64(262499.8932390327), np.float64(262499.5338763029), np.float64(262498.0343609994), np.float64(262491.77745219215), np.float64(262465.67198789306), np.float64(262356.79219059093), np.float64(261903.35816599644), np.float64(260026.7043884768)] [np.float64(252454.8863438829), np.float64(224782.81748492396), np.float64(151506.62848212195), np.float64(54807.02706198527), np.float64(0.0)]
+DEBUG days_x: ['D-14', 'D-13', 'D-12', 'D-11', 'D-10', 'D-9', 'D-8', 'D-7', 'D-6', 'D-5'] ['D-4', 'D-3', 'D-2', 'D-1', 'D-0']
+DEBUG asset_value: [np.float64(346489.0), np.float64(346488.97275714384), np.float64(346488.85907999694), np.float64(346488.3847362526), np.float64(346486.4054388889), np.float64(346478.1465814575), np.float64(346443.688462526), np.float64(346299.9716926692), np.float64(345701.4577812493), np.float64(343224.3534356531)] [np.float64(333229.87091202155), np.float64(296703.89960965264), np.float64(199982.40074720743), np.float64(72342.97904640081), np.float64(0.0)]
+DEBUG days_x: ['D-14', 'D-13', 'D-12', 'D-11', 'D-10', 'D-9', 'D-8', 'D-7', 'D-6', 'D-5'] ['D-4', 'D-3', 'D-2', 'D-1', 'D-0']
+DEBUG asset_value: [np.float64(346489.0), np.float64(346488.97275714384), np.float64(346488.85907999694), np.float64(346488.3847362526), np.float64(346486.4054388889), np.float64(346478.1465814575), np.float64(346443.688462526), np.float64(346299.9716926692), np.float64(345701.4577812493), np.float64(343224.3534356531)] [np.float64(333229.87091202155), np.float64(296703.89960965264), np.float64(199982.40074720743), np.float64(72342.97904640081), np.float64(0.0)]
+DEBUG days_x: ['D-14', 'D-13', 'D-12', 'D-11', 'D-10', 'D-9', 'D-8', 'D-7', 'D-6', 'D-5'] ['D-4', 'D-3', 'D-2', 'D-1', 'D-0']
+DEBUG asset_value: [np.float64(346489.0), np.float64(346488.97275714384), np.float64(346488.85907999694), np.float64(346488.3847362526), np.float64(346486.4054388889), np.float64(346478.1465814575), np.float64(346443.688462526), np.float64(346299.9716926692), np.float64(345701.4577812493), np.float64(343224.3534356531)] [np.float64(333229.87091202155), np.float64(296703.89960965264), np.float64(199982.40074720743), np.float64(72342.97904640081), np.float64(0.0)]
+DEBUG days_x: ['D-14', 'D-13', 'D-12', 'D-11', 'D-10', 'D-9', 'D-8', 'D-7', 'D-6', 'D-5'] ['D-4', 'D-3', 'D-2', 'D-1', 'D-0']
+DEBUG asset_value: [np.float64(346489.0), np.float64(346488.97275714384), np.float64(346488.85907999694), np.float64(346488.3847362526), np.float64(346486.4054388889), np.float64(346478.1465814575), np.float64(346443.688462526), np.float64(346299.9716926692), np.float64(345701.4577812493), np.float64(343224.3534356531)] [np.float64(333229.87091202155), np.float64(296703.89960965264), np.float64(199982.40074720743), np.float64(72342.97904640081), np.float64(0.0)]
+DEBUG days_x: ['D-14', 'D-13', 'D-12', 'D-11', 'D-10', 'D-9', 'D-8', 'D-7', 'D-6', 'D-5'] ['D-4', 'D-3', 'D-2', 'D-1', 'D-0']
+DEBUG asset_value: [np.float64(346489.0), np.float64(346488.97275714384), np.float64(346488.85907999694), np.float64(346488.3847362526), np.float64(346486.4054388889), np.float64(346478.1465814575), np.float64(346443.688462526), np.float64(346299.9716926692), np.float64(345701.4577812493), np.float64(343224.3534356531)] [np.float64(333229.87091202155), np.float64(296703.89960965264), np.float64(199982.40074720743), np.float64(72342.97904640081), np.float64(0.0)]
+DEBUG days_x: ['D-14', 'D-13', 'D-12', 'D-11', 'D-10', 'D-9', 'D-8', 'D-7', 'D-6', 'D-5'] ['D-4', 'D-3', 'D-2', 'D-1', 'D-0']
+DEBUG asset_value: [np.float64(346489.0), np.float64(346488.97275714384), np.float64(346488.85907999694), np.float64(346488.3847362526), np.float64(346486.4054388889), np.float64(346478.1465814575), np.float64(346443.688462526), np.float64(346299.9716926692), np.float64(345701.4577812493), np.float64(343224.3534356531)] [np.float64(333229.87091202155), np.float64(296703.89960965264), np.float64(199982.40074720743), np.float64(72342.97904640081), np.float64(0.0)]
+DEBUG days_x: ['D-2', 'D-1', 'D-0'] ['D-2', 'D-1', 'D-0']
+DEBUG asset_value: [np.float64(588000.0), np.float64(587679.2145069237), np.float64(0.0)] [np.float64(588000.0), np.float64(587679.2145069237), np.float64(0.0)]
+DEBUG days_x: ['D-1', 'D-0'] ['D-1', 'D-0']
+DEBUG asset_value: [np.float64(588000.0), np.float64(0.0)] [np.float64(588000.0), np.float64(0.0)]
+DEBUG days_x: ['D-1', 'D-0'] ['D-1', 'D-0']
+DEBUG asset_value: [np.float64(588000.0), np.float64(0.0)] [np.float64(588000.0), np.float64(0.0)]
+DEBUG days_x: ['D-1', 'D-0'] ['D-1', 'D-0']
+DEBUG asset_value: [np.float64(588000.0), np.float64(0.0)] [np.float64(588000.0), np.float64(0.0)]
+  Stopping...

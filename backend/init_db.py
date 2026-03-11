@@ -162,6 +162,8 @@ def init_db():
     cursor.execute('DROP TABLE IF EXISTS inventory')
     cursor.execute('DROP TABLE IF EXISTS price_history')
     cursor.execute('DROP TABLE IF EXISTS booking_events')
+    cursor.execute('DROP TABLE IF EXISTS model_settings')
+    cursor.execute('DROP TABLE IF EXISTS product_classification')
 
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS inventory (
@@ -202,6 +204,33 @@ def init_db():
             is_package         INTEGER DEFAULT 0,
             discount_amount    INTEGER DEFAULT 0,
             FOREIGN KEY (inventory_id) REFERENCES inventory(id)
+        )
+    ''')
+
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS model_settings (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            item_type       TEXT NOT NULL,
+            characteristic  TEXT NOT NULL,
+            strategy        TEXT NOT NULL,
+            config_json     TEXT NOT NULL,
+            composite_score REAL,
+            mape            REAL,
+            revenue_lift    REAL,
+            spoilage_reduction REAL,
+            updated_at      TEXT NOT NULL,
+            UNIQUE(item_type, characteristic)
+        )
+    ''')
+
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS product_classification (
+            name            TEXT NOT NULL,
+            item_type       TEXT NOT NULL,
+            characteristic  TEXT NOT NULL,
+            source          TEXT,
+            updated_at      TEXT NOT NULL,
+            PRIMARY KEY (name, item_type)
         )
     ''')
 
