@@ -12,8 +12,10 @@ from dotenv import load_dotenv
 # .env ファイルから環境変数を読み込む
 load_dotenv()
 
-# 環境変数 DATABASE_URL が設定されていれば本番DBを使用、なければSQLiteを使用
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./dynamic_pricing.db")
+# SQLiteのパスを絶対パスで解決（クロスプラットフォーム対応）
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DEFAULT_DB_PATH = os.path.join(BASE_DIR, "dynamic_pricing.db")
+DATABASE_URL = os.getenv("DATABASE_URL", f"sqlite:///{DEFAULT_DB_PATH}")
 
 # SQLite の場合は check_same_thread を無効化（FastAPIのマルチスレッド対応）
 connect_args = {}

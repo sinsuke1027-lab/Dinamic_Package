@@ -195,7 +195,7 @@ with st.sidebar:
     
     st.markdown("---")
     st.markdown("### 🎛 AI Command Center")
-    st.markdown(f"<p style='color:{Theme.text_muted};font-size:.8rem'>AIの行動ルールをリアルタイム編集</p>", unsafe_allow_html=True)
+    st.markdown(f"<p style='color:{Theme.text_muted};font-size:{Theme.size_md}'>AIの行動ルールをリアルタイム編集</p>", unsafe_allow_html=True)
     
     with st.expander("🛡 セーフティガード (上下限)", expanded=False):
         max_discount = st.slider("最大割引率 (%)", 0, 80, 30, help="これ以上安くしない限界値")
@@ -222,7 +222,7 @@ with st.sidebar:
         else:
             def_k, def_p = 20.0, 0.12
             
-        st.markdown(f"<p style='color:{Theme.text_muted};font-size:.8rem'>カーブ微調整</p>", unsafe_allow_html=True)
+        st.markdown(f"<p style='color:{Theme.text_muted};font-size:{Theme.size_md}'>カーブ微調整</p>", unsafe_allow_html=True)
         decay_k = st.slider("価値減衰カーブの鋭さ (k)", 5.0, 50.0, def_k, 0.5, help="数値が大きいほど値崩れが急激になります")
         decay_p = st.slider("値崩れ開始ポイント (p)", 0.01, 0.50, def_p, 0.01, help="出発日（0）から見て、どのタイミングから価値が下がり始めるか（1.0=90日前）")
 
@@ -431,7 +431,7 @@ if selected_tab == "🎯 本日のアクション":
                     <div style="background:rgba(99,102,241,0.2); color:#a5b4fc; border:1px solid rgba(99,102,241,0.4); border-radius:6px; padding:3px 10px; font-size:0.8rem; font-weight:700;">
                         📅 {dep_label}出発
                     </div>
-                    <div style="color:{Theme.chart_accent}; font-size:0.85rem; font-weight:600; margin-left:auto;">+¥{rec['gain']:,} 改善</div>
+                    <div style="color:{Theme.chart_accent}; font-size:{Theme.size_md}; font-weight:600; margin-left:auto;">+¥{rec['gain']:,} 改善</div>
                 </div>
                 <div style="font-size:1rem; font-weight:800; color:{Theme.text_dark}; margin-bottom:6px;">
                     {item_icon} {rec['item_name']} ＋ ✈️ {rec['partner_name']}
@@ -440,7 +440,7 @@ if selected_tab == "🎯 本日のアクション":
                     <span style="color:{Theme.success}; font-weight:700;">推奨価格: ¥{rec['optimal_price']:,}</span>
                     <span style="color:{Theme.text_muted};">上限セット数: {rec['max_sets']} セット</span>
                 </div>
-                <div style="font-size:0.85rem; color:{Theme.text_sec};">{rec['reason']}</div>
+                <div style="font-size:{Theme.size_md}; color:{Theme.text_sec};">{rec['reason']}</div>
             </div>
             """, unsafe_allow_html=True)
 
@@ -456,10 +456,10 @@ if selected_tab == "🎯 本日のアクション":
                     dep_label = dep_date
                 st.markdown(f"""
                 <div style="background:rgba(100,116,139,0.1); border:1px solid rgba(100,116,139,0.4); border-radius:10px; padding:12px; margin:6px 0; display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
-                    <span style="background:rgba(99,102,241,0.15); color:#a5b4fc; border-radius:6px; padding:2px 8px; font-size:0.75rem; font-weight:700;">📅 {dep_label}</span>
+                    <span style="background:rgba(99,102,241,0.15); color:#a5b4fc; border-radius:6px; padding:2px 8px; font-size:{Theme.size_sm}; font-weight:700;">📅 {dep_label}</span>
                     <span style="font-weight:700; color:{Theme.text_sec};">{item_icon} {rec['item_name']}</span>
-                    <span style="color:{Theme.text_sec}; font-size:0.85rem;">現行価格: ¥{rec['optimal_price']:,}</span>
-                    <div style="width:100%; font-size:0.8rem; color:{Theme.text_muted}; margin-top:4px;">{rec['reason']}</div>
+                    <span style="color:{Theme.text_sec}; font-size:{Theme.size_md};">現行価格: ¥{rec['optimal_price']:,}</span>
+                    <div style="width:100%; font-size:{Theme.size_xs}; color:{Theme.text_muted}; margin-top:4px;">{rec['reason']}</div>
                 </div>
                 """, unsafe_allow_html=True)
 
@@ -1441,20 +1441,20 @@ if selected_tab == "🧪 パッケージ販売シミュレータ":
 
         # ─── 未来予測部分 (選択された戦略) ───
         if is_hybrid:
-            line_color_rev = '#16a34a' # green-600
-            line_color_rev_sub = 'rgba(34, 197, 94, 0.5)'
-            line_color_h = 'rgba(16, 185, 129, 0.9)' # emerald-500
-            line_color_f = 'rgba(20, 184, 166, 0.9)' # teal-500
+            line_color_rev = Theme.color_pos
+            line_color_rev_sub = hex_to_rgba(Theme.color_pos, 0.5)
+            line_color_h = Theme.chart_h_alpha
+            line_color_f = Theme.chart_f_alpha
             name_rev = "💰 予測売上 全体 (需要予測ハイブリッド)"
             name_rev_h = "💰 予測売上 ホテル (需要予測ハイブリッド)"
             name_rev_f = "💰 予測売上 フライト (需要予測ハイブリッド)"
             name_h = "🏨 予測残室割合 (需要予測ハイブリッド)"
             name_f = "✈️ 予測残席割合 (需要予測ハイブリッド)"
         else:
-            line_color_rev = '#dc2626' # red-600
-            line_color_rev_sub = 'rgba(239, 68, 68, 0.5)'
-            line_color_h = 'rgba(239, 68, 68, 0.9)' # red-500
-            line_color_f = 'rgba(249, 115, 22, 0.9)'  # orange-500
+            line_color_rev = Theme.color_neg
+            line_color_rev_sub = hex_to_rgba(Theme.color_neg, 0.5)
+            line_color_h = Theme.color_neg
+            line_color_f = "#f97316" # orange-500 (Add this to theme later if needed, or keep for now)
             name_rev = "💰 予測売上 全体 (ルールベース)"
             name_rev_h = "💰 予測売上 ホテル (ルールベース)"
             name_rev_f = "💰 予測売上 フライト (ルールベース)"
@@ -1498,24 +1498,24 @@ if selected_tab == "🧪 パッケージ販売シミュレータ":
         # 例：D-30 (パッケージ用キャンセル無料終了の目安)
         d30_label = "D-30"
         if d30_label in full_x:
-            fig_sim.add_vline(x=d30_label, line_width=1, line_dash="dot", line_color="rgba(148, 163, 184, 0.5)")
+            fig_sim.add_vline(x=d30_label, line_width=1, line_dash="dot", line_color=Theme.chart_line_muted)
             fig_sim.add_annotation(
                 x=d30_label, y=0.05, yref="paper",
                 text="D-30",
                 showarrow=False,
-                font=dict(color="rgba(148, 163, 184, 0.8)", size=10),
+                font=dict(color=Theme.text_muted, size=10),
                 xanchor="left", yanchor="bottom"
             )
             
         # 例：D-14 (単品航空券需要ピークなど)
         d14_label = "D-14"
         if d14_label in full_x:
-            fig_sim.add_vline(x=d14_label, line_width=1, line_dash="dot", line_color="rgba(148, 163, 184, 0.5)")
+            fig_sim.add_vline(x=d14_label, line_width=1, line_dash="dot", line_color=Theme.chart_line_muted)
             fig_sim.add_annotation(
                 x=d14_label, y=0.05, yref="paper",
                 text="D-14",
                 showarrow=False,
-                font=dict(color="rgba(148, 163, 184, 0.8)", size=10),
+                font=dict(color=Theme.text_muted, size=10),
                 xanchor="left", yanchor="bottom"
             )
 
@@ -1550,11 +1550,11 @@ if selected_tab == "🧪 パッケージ販売シミュレータ":
         ck1, ck2, ck3 = st.columns(3)
         with ck1:
             st.markdown(f"""
-            <div style='background:#f0f9ff; border:1px solid #94a3b8; border-radius:12px; padding:15px; text-align:center;'>
+            <div style='background:{Theme.alert_info_bg}; border:1px solid {Theme.border_dark}; border-radius:12px; padding:15px; text-align:center;'>
                 <div style='font-size:0.8rem; color:{Theme.text_muted};'>① 現状維持 (固定価格・何もしない) の着地点</div>
                 <div style='font-size:1.5rem; font-weight:800; color:{Theme.text_main};'>¥{int(res_n):,}</div>
-                <div style='font-size:0.8rem; margin-top:10px; color:#475569;'>🏨 販売: {int(total_sold_n_h)}室 / 売れ残り: {int(curr_n_h_stock_fin)}室</div>
-                <div style='font-size:0.8rem; color:#475569;'>✈️ 販売: {int(total_sold_n_f)}席 / 売れ残り: {int(curr_n_f_stock_fin)}席</div>
+                <div style='font-size:0.8rem; margin-top:10px; color:{Theme.text_sec};'>🏨 販売: {int(total_sold_n_h)}室 / 売れ残り: {int(curr_n_h_stock_fin)}室</div>
+                <div style='font-size:0.8rem; color:{Theme.text_sec};'>✈️ 販売: {int(total_sold_n_f)}席 / 売れ残り: {int(curr_n_f_stock_fin)}席</div>
             </div>
             """, unsafe_allow_html=True)
         with ck2:
@@ -1563,8 +1563,8 @@ if selected_tab == "🧪 パッケージ販売シミュレータ":
             h_unsold_sel = int(curr_b_h_stock)
             f_unsold_sel = int(flight_stock_b)
             
-            box_bg = "#f0fdf4" if is_hybrid else "#fff1f2"
-            box_bc = "#16a34a" if is_hybrid else "#dc2626"
+            box_bg = Theme.color_pos_light if is_hybrid else Theme.color_neg_light
+            box_bc = Theme.color_pos if is_hybrid else Theme.color_neg
             title = "② 需要予測ハイブリッドの理想着地点" if is_hybrid else "② ルールベース・プライシングの着地点"
             st.markdown(f"""
             <div style='background:{box_bg}; border:1px solid {box_bc}; border-radius:12px; padding:15px; text-align:center;'>
@@ -1576,13 +1576,13 @@ if selected_tab == "🧪 パッケージ販売シミュレータ":
             </div>
             """, unsafe_allow_html=True)
         with ck3:
-            diff_color = "#16a34a" if diff >= 0 else "#dc2626"
-            diff_bg = "#f0fdf4" if diff >= 0 else "#fff1f2"
+            diff_color = Theme.color_pos if diff >= 0 else Theme.color_neg
+            diff_bg = Theme.color_pos_light if diff >= 0 else Theme.color_neg_light
             st.markdown(f"""
-            <div style='background:{diff_bg}; border:1px solid {diff_color}; border-radius:12px; padding:15px; text-align:center; box-shadow: 0 4px 12px rgba(0,0,0,0.06);'>
+            <div style='background:{diff_bg}; border:1px solid {diff_color}; border-radius:12px; padding:15px; text-align:center; box-shadow: {Theme.shadow_info};'>
                 <div style='font-size:0.8rem; color:{diff_color};'>トータル収益改善の見込み</div>
                 <div style='font-size:1.5rem; font-weight:900; color:{diff_color};'>+¥{int(diff):,}</div>
-                <div style='font-size:0.8rem; margin-top:10px; color:#475569;'>（リスク回避後の純増利益）</div>
+                <div style='font-size:0.8rem; margin-top:10px; color:{Theme.text_sec};'>（リスク回避後の純増利益）</div>
             </div>
             """, unsafe_allow_html=True)
             
@@ -1995,7 +1995,7 @@ elif selected_tab == "🔬 モデル性能評価と最適化選択":
 
                 # シナリオごとのグラフ用データ
                 fig = go.Figure()
-                colors = ["#3b82f6", "#ef4444", "#10b981", "#f59e0b", "#8b5cf6", "#ec4899", "#8b5cf6"]
+                colors = Theme.palette
 
                 # 実績線の加算用
                 all_actual_rates = None
@@ -2074,7 +2074,7 @@ elif selected_tab == "🔬 モデル性能評価と最適化選択":
                 if all_actual_rates is not None and all_lead_days is not None:
                     fig.add_trace(go.Scatter(
                         x=-all_lead_days, y=all_actual_rates * 100, mode='lines',
-                        name='実際の販売ペース', line=dict(color='rgba(150, 150, 150, 0.7)', width=4)
+                        name='実際の販売ペース', line=dict(color=Theme.chart_actual, width=4)
                     ))
 
                 # グラフ描画
@@ -2152,4 +2152,4 @@ elif selected_tab == "🔬 モデル性能評価と最適化選択":
 # Footer & Logs
 # ══════════════════════════════════════════════════════════════════
 last_upd = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
-st.markdown(f'<p style="color:#94a3b8;text-align:right;font-size:.8rem">最終更新: {last_upd}</p>', unsafe_allow_html=True)
+st.markdown(f'<p style="color:{Theme.text_muted};text-align:right;font-size:.8rem">最終更新: {last_upd}</p>', unsafe_allow_html=True)

@@ -35,14 +35,14 @@ def light_layout(fig: go.Figure, title: str = "", secondary_y: bool = False, yax
     """PlotlyのFigureにライトテーマ（SaaS風白基調）の共通レイアウトを適用する"""
     fig.update_layout(
         title=title,
-        paper_bgcolor="rgba(0,0,0,0)",
-        plot_bgcolor="rgba(0,0,0,0)",
+        paper_bgcolor=Theme.bg_transparent,
+        plot_bgcolor=Theme.bg_transparent,
         template="plotly_white",
         margin=dict(l=20, r=20, t=50, b=40),
-        font=dict(family="Outfit, sans-serif", color=Theme.text_main),
+        font=dict(family="'Outfit', 'Inter', 'Segoe UI', 'Roboto', sans-serif", color=Theme.text_main, size=14),
         xaxis=dict(gridcolor=Theme.border_light, linecolor=Theme.border_dark),
         yaxis=dict(gridcolor=Theme.border_light, linecolor=Theme.border_dark, title=yaxis_title),
-        legend=dict(bgcolor="rgba(255,255,255,0.8)", bordercolor=Theme.border_dark)
+        legend=dict(bgcolor=Theme.bg_glass, bordercolor=Theme.border_dark)
     )
     if secondary_y:
         fig.update_layout(yaxis2=dict(gridcolor=Theme.border_light, linecolor=Theme.border_dark))
@@ -68,38 +68,46 @@ def apply_custom_css():
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;900&family=Inter:wght@400;600;700&display=swap');
     
-    .stApp {{ background: {Theme.bg_main}; color: {Theme.text_main}; font-family: 'Inter', sans-serif; }}
+    
+    .stApp {{ 
+        background: {Theme.bg_main}; 
+        color: {Theme.text_main}; 
+        font-family: 'Inter', 'Segoe UI', 'Roboto', 'Helvetica Neue', 'Arial', sans-serif;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+        text-rendering: optimizeLegibility;
+    }}
     
     /* グラスモーフィズム・カード (ライト) */
     .metric-card {{
-        background: rgba(255, 255, 255, 0.85);
+        background: {Theme.bg_glass};
         backdrop-filter: blur(12px);
         border: 1px solid rgba(226, 232, 240, 0.8);
         border-radius: 16px;
         padding: 24px;
         transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+        box-shadow: {Theme.shadow_sm};
         margin-bottom: 20px;
     }}
     .metric-card:hover {{ 
         transform: translateY(-4px); 
-        background: rgba(255, 255, 255, 1.0); 
+        background: {Theme.white}; 
         border-color: rgba(99, 102, 241, 0.3);
-        box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.05);
+        box-shadow: {Theme.shadow_lg};
     }}
     
-    .metric-label {{ font-size: 0.85rem; color: {Theme.text_muted}; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; }}
-    .metric-value {{ font-size: 2rem; font-weight: 900; color: {Theme.text_dark}; margin: 8px 0; font-family: 'Outfit', sans-serif; }}
-    .metric-sub {{ font-size: 0.9rem; color: {Theme.text_muted}; font-weight: 500; }}
+    .metric-label {{ font-size: {Theme.size_md}; color: {Theme.text_muted}; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; font-family: 'Inter', sans-serif; }}
+    .metric-value {{ font-size: {Theme.size_2xl}; font-weight: 900; color: {Theme.text_dark}; margin: 8px 0; font-family: 'Outfit', 'Segoe UI', sans-serif; }}
+    .metric-sub {{ font-size: {Theme.size_md}; color: {Theme.text_muted}; font-weight: 500; font-family: 'Inter', sans-serif; }}
     
-    .badge-up {{ background: rgba(34, 197, 94, 0.15); color: {Theme.badge_green_text}; padding: 4px 10px; border-radius: 999px; font-size: 0.75rem; font-weight: 700; border: 1px solid rgba(34, 197, 94, 0.3); }}
-    .badge-down {{ background: rgba(239, 68, 68, 0.15); color: {Theme.badge_red_text}; padding: 4px 10px; border-radius: 999px; font-size: 0.75rem; font-weight: 700; border: 1px solid rgba(239, 68, 68, 0.3); }}
-    .badge-brake {{ background: rgba(245, 158, 11, 0.15); color: #b45309; padding: 4px 10px; border-radius: 999px; font-size: 0.7rem; font-weight: 800; border: 1px solid rgba(245, 158, 11, 0.3); margin-top: 10px; display: inline-block; }}
+    .badge-up {{ background: rgba(34, 197, 94, 0.15); color: {Theme.badge_green_text}; padding: 4px 10px; border-radius: 999px; font-size: {Theme.size_sm}; font-weight: 700; border: 1px solid rgba(34, 197, 94, 0.3); }}
+    .badge-down {{ background: rgba(239, 68, 68, 0.15); color: {Theme.badge_red_text}; padding: 4px 10px; border-radius: 999px; font-size: {Theme.size_sm}; font-weight: 700; border: 1px solid rgba(239, 68, 68, 0.3); }}
+    .badge-brake {{ background: rgba(245, 158, 11, 0.15); color: #b45309; padding: 4px 10px; border-radius: 999px; font-size: {Theme.size_xs}; font-weight: 800; border: 1px solid rgba(245, 158, 11, 0.3); margin-top: 10px; display: inline-block; }}
     
     /* タブ・サイドバーの装飾 (ライト) */
-    .stTabs [data-baseweb="tab-list"] {{ gap: 10px; background: rgba(241, 245, 249, 0.8); padding: 5px; border-radius: 12px; }}
-    .stTabs [data-baseweb="tab"] {{ height: 45px; border-radius: 8px; color: #475569; transition: all 0.2s; border: none; font-weight: 600; }}
-    .stTabs [aria-selected="true"] {{ background: {Theme.white}; color: {Theme.text_dark}; font-weight: 800; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }}
+    .stTabs [data-baseweb="tab-list"] {{ gap: 10px; background: {Theme.bg_tab_list}; padding: 5px; border-radius: 12px; }}
+    .stTabs [data-baseweb="tab"] {{ height: 45px; border-radius: 8px; color: {Theme.text_sec}; transition: all 0.2s; border: none; font-weight: 600; }}
+    .stTabs [aria-selected="true"] {{ background: {Theme.white}; color: {Theme.text_dark}; font-weight: 800; box-shadow: {Theme.shadow_sm}; }}
     
     /* ナビゲーション用のラジオボタン（疑似タブ）をモダンなボタン・タブ風に整形 */
     div[data-testid="stRadio"] div[aria-label="MainNavigation"] label[data-baseweb="radio"] > div:first-child {{
@@ -110,10 +118,10 @@ def apply_custom_css():
         display: flex;
         justify-content: center;
         gap: 8px;
-        background: rgba(241, 245, 249, 0.8); /* slate-100 */
+        background: {Theme.bg_tab_list};
         padding: 6px;
         border-radius: 12px;
-        border: 1px solid rgba(226, 232, 240, 1.0);
+        border: 1px solid {Theme.border_light};
         width: 100%;
         box-shadow: inset 0 2px 4px 0 rgba(0, 0, 0, 0.02);
     }}
@@ -137,14 +145,14 @@ def apply_custom_css():
     /* ホバー時 */
     div[data-testid="stRadio"] div[aria-label="MainNavigation"] label[data-baseweb="radio"]:hover {{
         background: rgba(255, 255, 255, 0.6) !important;
-        box-shadow: 0 1px 2px rgba(0,0,0,0.05) !important;
+        box-shadow: {Theme.shadow_sm} !important;
     }}
 
     /* 選択中のスタイル */
     div[data-testid="stRadio"] div[aria-label="MainNavigation"] label[data-baseweb="radio"]:has(input:checked) {{
         background: {Theme.white} !important;
-        border-color: rgba(226, 232, 240, 1.0) !important;
-        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03) !important;
+        border-color: {Theme.border_light} !important;
+        box-shadow: {Theme.shadow_md} !important;
     }}
     
     div[data-testid="stRadio"] div[aria-label="MainNavigation"] label[data-baseweb="radio"]:has(input:checked) p {{
@@ -156,7 +164,7 @@ def apply_custom_css():
         color: {Theme.text_muted} !important; /* slate-500 */
         font-weight: 600 !important;
         margin: 0 !important;
-        font-size: 0.95rem !important;
+        font-size: {Theme.size_md} !important;
         text-align: center;
     }}
 
@@ -176,7 +184,6 @@ def apply_custom_css():
         fill: #94a3b8 !important;
     }}
     
-    /* 通知アラート (ライト) */
     .alert-box {{
         padding: 12px 20px;
         border-radius: 12px;
@@ -186,7 +193,7 @@ def apply_custom_css():
         gap: 12px;
         font-weight: 600;
         backdrop-filter: blur(8px);
-        box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+        box-shadow: {Theme.shadow_sm};
     }}
     .alert-warning {{ background: {Theme.alert_warning_bg}; border: 1px solid {Theme.alert_warning_border}; color: {Theme.alert_warning_text}; }}
     .alert-danger {{ background: {Theme.badge_red_bg}; border: 1px solid #fecaca; color: {Theme.badge_red_text}; }}
@@ -279,10 +286,10 @@ def apply_custom_css():
     
     /* dataframe and data_editor */
     [data-testid="stDataFrame"], [data-testid="stDataEditor"], .stDataFrame, .stDataEditor {{
-        background-color: #ffffff !important;
+        background-color: {Theme.bg_card} !important;
     }}
     [data-testid="stDataFrame"] *, [data-testid="stDataEditor"] * {{
-        color: #000000 !important;
+        color: {Theme.chart_text} !important;
     }}
     /* アプリ全体のメイン背景色を強制的に白/ライト系にする */
     .stApp, .stApp > header, .main {{
@@ -296,6 +303,39 @@ def apply_custom_css():
     /* caption */
     div[data-testid="stCaptionContainer"] p {{
         color: {Theme.text_muted} !important;
+    }}
+
+    /* ─── 環境依存（ダークモード等）の強制上書き ─── */
+    /* ツールチップのリセット */
+    div[data-testid="stTooltipContent"] {{
+        background-color: {Theme.tooltip_bg} !important;
+        color: {Theme.tooltip_text} !important;
+        border: 1px solid {Theme.border_dark} !important;
+    }}
+    /* Iframe 背景のリセット (グラフなど) */
+    iframe {{
+        background-color: transparent !important;
+    }}
+    /* スクロールバーのカスタマイズ（ブラウザに依らずライト系に固定） */
+    ::-webkit-scrollbar {{
+        width: 8px;
+        height: 8px;
+    }}
+    ::-webkit-scrollbar-track {{
+        background: {Theme.bg_main};
+    }}
+    ::-webkit-scrollbar-thumb {{
+        background: {Theme.border_dark};
+        border-radius: 10px;
+        border: 2px solid {Theme.bg_main};
+    }}
+    ::-webkit-scrollbar-thumb:hover {{
+        background: {Theme.text_muted};
+    }}
+    /* Firefox 用 */
+    * {{
+        scrollbar-width: thin;
+        scrollbar-color: {Theme.border_dark} {Theme.bg_main};
     }}
     </style>
     """, unsafe_allow_html=True)

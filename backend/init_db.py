@@ -14,7 +14,9 @@ import random
 import math
 from datetime import datetime, timedelta, timezone, date
 
-DATABASE = 'inventory.db'
+import os
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DATABASE = os.path.join(BASE_DIR, 'inventory.db')
 
 # 再現性確保のためシードを固定
 random.seed(42)
