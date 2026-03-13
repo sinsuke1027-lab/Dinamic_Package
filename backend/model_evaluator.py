@@ -13,29 +13,36 @@ from datetime import datetime, date, timezone
 import math
 
 from pricing_engine import calc_inventory_adjustment, calc_time_adjustment, calculate_inventory_decay_factor
+from constants import (
+    CLASS_POPULAR_THRESHOLD, CLASS_NICHE_DAYS, CLASS_NICHE_RATIO,
+    SCORE_WEIGHT_MAPE, SCORE_WEIGHT_LIFT, SCORE_WEIGHT_SPOILAGE, SCORE_WEIGHT_DIR_ACC
+)
 
 DB_PATH = 'inventory.db'
 
 # ─── 商品分類と自動判定 ───────────────────────────────────────────────
 
-def auto_classify_product(history_df: pd.DataFrame, total_stock: int) -> str:
+def auto_classify_product(history_df: pd.DataFrame, total_stock: int, config: Optional[dict] = None) -> str:
     """
     過去の実績データ（日ごとの販売累積など）から、商品の特性を自動サジェストする。
     history_df は lead_days に対しての販売履歴。
     """
+    conf = config or {}
     if history_df.empty or total_stock == 0:
         return "stable" # データ不足時は安定とする
         
     final_sales = history_df["quantity"].sum()
     final_rate = final_sales / total_stock
     
-    # 最終的な販売率が75%以上なら「大人気」
-    if final_rate >= 0.75:
+    # 最終的な販売率がしきい値以上なら「大人気」
+    if final_rate >= conf.get('class_popular_threshold', CLASS_POPULAR_THRESHOLD):
         return "popular"
         
-    # 直前期（残り14日以内）に売上の半分以上が集中しているなら「ニッチ」
-    late_sales = history_df[history_df["lead_days"] <= 14]["quantity"].sum()
-    if final_sales > 0 and (late_sales / final_sales) > 0.5:
+    # 直前期（残りN日以内）に売上の半分以上が集中しているなら「ニッチ」
+    n_days = conf.get('class_niche_days', CLASS_NICHE_DAYS)
+    n_ratio = conf.get('class_niche_ratio', CLASS_NICHE_RATIO)
+    late_sales = history_df[history_df["lead_days"] <= n_days]["quantity"].sum()
+    if final_sales > 0 and (late_sales / final_sales) > n_ratio:
         return "niche"
         
     return "stable"
@@ -301,7 +308,10 @@ def backtest_strategy(strategy: str, inv_row: pd.Series, booking_events: pd.Data
     # Dir Acc: 0-100直結
     score_dir = dir_acc
     
-    composite = (score_mape * 0.3) + (score_lift * 0.4) + (score_spoilage * 0.2) + (score_dir * 0.1)
+    composite = (score_mape     * config.get('score_weight_mape',     SCORE_WEIGHT_MAPE))     + \
+                (score_lift     * config.get('score_weight_lift',     SCORE_WEIGHT_LIFT))     + \
+                (score_spoilage * config.get('score_weight_spoilage', SCORE_WEIGHT_SPOILAGE)) + \
+                (score_dir      * config.get('score_weight_dir_acc',  SCORE_WEIGHT_DIR_ACC))
     
     return {
         "mape": mape,
@@ -346,7 +356,7 @@ def run_batch_evaluation(inv_df: pd.DataFrame, booking_events: pd.DataFrame, cur
         if cls_data:
             char = cls_data["characteristic"]
         else:
-            char = auto_classify_product(ev, row["total_stock"])
+            char = auto_classify_product(ev, row["total_stock"], config=current_config)
             
         item_type = row["item_type"]
         

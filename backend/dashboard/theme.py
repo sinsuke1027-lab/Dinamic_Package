@@ -18,23 +18,23 @@ class ThemeColors:
         fig.update_layout(
             paper_bgcolor=cls.bg_transparent,
             plot_bgcolor=cls.bg_transparent,
-            font=dict(family="'Outfit', 'Inter', 'Segoe UI', 'Roboto', sans-serif", color=cls.chart_text, size=13),
+            font=dict(family="'Outfit', 'Inter', 'Segoe UI', 'Roboto', sans-serif", color=cls.chart_text, size=14),
             legend=dict(
-                font=dict(color=cls.chart_text, size=13)
+                font=dict(color=cls.chart_text, size=14)
             ),
             xaxis=dict(
                 color=cls.chart_text,
                 gridcolor=cls.chart_grid,
                 zerolinecolor=cls.chart_grid,
-                tickfont=dict(color=cls.chart_text, size=12),
-                title_font=dict(color=cls.chart_text, size=14, weight="bold")
+                tickfont=dict(color=cls.chart_text, size=13),
+                title_font=dict(color=cls.chart_text, size=15, weight="bold")
             ),
             yaxis=dict(
                 color=cls.chart_text,
                 gridcolor=cls.chart_grid,
                 zerolinecolor=cls.chart_grid,
-                tickfont=dict(color=cls.chart_text, size=12),
-                title_font=dict(color=cls.chart_text, size=14, weight="bold")
+                tickfont=dict(color=cls.chart_text, size=13),
+                title_font=dict(color=cls.chart_text, size=15, weight="bold")
             ),
             polar=dict(
                 radialaxis=dict(
@@ -120,6 +120,8 @@ class ThemeColors:
     alert_danger_border = "#fecaca"
     alert_danger_text = "#991b1b"
     
+    alert_info_bg = "#e0e7ff"
+    alert_info_border = "#c7d2fe"
     alert_info_text = "#3730a3"
 
     # ─── UI 特殊効果 ───
@@ -134,14 +136,34 @@ class ThemeColors:
     palette = ["#6366f1", "#10b981", "#f59e0b", "#0284c7", "#8b5cf6", "#ec4899", "#ef4444"]
 
     # ─── フォントサイズ ───
-    size_xs = "0.7rem"     # 極小 (キャプション等)
-    size_sm = "0.75rem"    # 小 (バッジ等)
-    size_md = "0.85rem"    # 中 (標準的な補助テキスト)
-    size_base = "1rem"     # 基本 (段落等)
-    size_lg = "1.2rem"     # 大 (アイコン、強調、小見出し)
-    size_xl = "1.5rem"     # 特大 (カード内の主要数値)
-    size_2xl = "2rem"      # 巨大 (メインメトリック)
-    size_3xl = "2.4rem"    # 最大 (インパクト強調)
+    size_xs = "0.75rem"    # 極小 (キャプション等)
+    size_sm = "0.875rem"   # 小 (バッジ等)
+    size_md = "1.0rem"     # 中 (標準的な補助テキスト)
+    size_base = "1.1rem"   # 基本 (段落等)
+    size_lg = "1.35rem"    # 大 (アイコン、強調、小見出し)
+    size_xl = "1.75rem"    # 特大 (カード内の主要数値)
+    size_2xl = "2.5rem"    # 巨大 (メインメトリック)
+    size_3xl = "3.2rem"    # 最大 (インパクト強調)
+
+    # ─── セマンティック・フォントサイズ ───
+    font_size_h1 = "2.2rem"
+    font_size_h2 = "1.8rem"
+    font_size_h3 = "1.4rem"
+    font_size_card_title = "1rem"
+    font_size_metric = "2.4rem"
+    font_size_metric_label = "0.85rem"
+    font_size_body = "0.95rem"
+    font_size_caption = "0.75rem"
+
+    # ─── 余白・角丸 ───
+    radius_sm = "8px"
+    radius_md = "12px"
+    radius_lg = "20px"
+    
+    spacing_xs = "4px"
+    spacing_sm = "12px"
+    spacing_md = "20px"
+    spacing_lg = "32px"
 
 # 各ファイルで `from dashboard.theme import Theme` として利用する
 Theme = ThemeColors()

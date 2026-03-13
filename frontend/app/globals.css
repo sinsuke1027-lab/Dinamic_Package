@@ -87,7 +87,7 @@ body {
   gap: 0.25rem;
   padding: 0.2rem 0.6rem;
   border-radius: 9999px;
-  font-size: 0.7rem;
+  font-size: 0.75rem;
   font-weight: 700;
   letter-spacing: 0.05em;
   text-transform: uppercase;
@@ -169,7 +169,7 @@ body {
 
 /* ── 価格表示 ─────────────────────────── */
 .price-display {
-  font-size: 2.5rem;
+  font-size: 3.2rem;
   font-weight: 900;
   letter-spacing: -0.03em;
   line-height: 1;
@@ -210,7 +210,7 @@ body {
 .data-table th {
   text-align: left;
   padding: 0.75rem 1rem;
-  font-size: 0.75rem;
+  font-size: 0.875rem;
   font-weight: 600;
   color: rgba(255, 255, 255, 0.5);
   letter-spacing: 0.08em;
@@ -221,7 +221,7 @@ body {
 .data-table td {
   padding: 1rem;
   border-bottom: 1px solid var(--color-border);
-  font-size: 0.875rem;
+  font-size: 1.0rem;
 }
 
 .data-table tr:hover td {

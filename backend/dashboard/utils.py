@@ -8,7 +8,49 @@ import plotly.graph_objects as go
 import streamlit as st
 import sqlite3
 import os
+import pandas as pd
 from datetime import datetime, timezone
+
+def light_dataframe(df: "pd.DataFrame", **kwargs) -> None:
+    """DataFrameをライトテーマのHTMLテーブルとして表示する。
+    st.dataframe の Canvas レンダリングが黒背景になる問題を回避するため、
+    HTML テーブルを st.markdown で描画する。
+    kwargs は use_container_width, hide_index 等（無視して互換性を維持）。
+    """
+    # NaN を空文字に変換
+    df = df.fillna("")
+    
+    # HTMLテーブル生成
+    header_cells = "".join(
+        f"<th style='background:#f1f5f9;color:#0f172a;font-weight:700;"
+        f"padding:8px 12px;border-bottom:2px solid #e2e8f0;"
+        f"border-right:1px solid #e2e8f0;text-align:left;font-size:0.85rem;'>"
+        f"{col}</th>"
+        for col in df.columns
+    )
+    header = f"<tr>{header_cells}</tr>"
+    
+    rows = []
+    for i, (_, row) in enumerate(df.iterrows()):
+        bg = "#ffffff" if i % 2 == 0 else "#f8fafc"
+        cells = "".join(
+            f"<td style='background:{bg};color:#1e293b;padding:7px 12px;"
+            f"border-bottom:1px solid #e2e8f0;border-right:1px solid #e2e8f0;"
+            f"font-size:0.9rem;'>{val}</td>"
+            for val in row
+        )
+        rows.append(f"<tr>{cells}</tr>")
+    
+    table_html = f"""
+    <div style="overflow-x:auto;border:1px solid #e2e8f0;border-radius:8px;margin-bottom:1rem;">
+      <table style="border-collapse:collapse;width:100%;font-family:'Inter',sans-serif;">
+        <thead>{header}</thead>
+        <tbody>{"".join(rows)}</tbody>
+      </table>
+    </div>
+    """
+    st.markdown(table_html, unsafe_allow_html=True)
+
 
 def log_price_history(results: list[dict], db_path: str):
     """現在の動的価格を履歴テーブルに保存する（トレンド可視化用）"""
@@ -39,7 +81,7 @@ def light_layout(fig: go.Figure, title: str = "", secondary_y: bool = False, yax
         plot_bgcolor=Theme.bg_transparent,
         template="plotly_white",
         margin=dict(l=20, r=20, t=50, b=40),
-        font=dict(family="'Outfit', 'Inter', 'Segoe UI', 'Roboto', sans-serif", color=Theme.text_main, size=14),
+        font=dict(family="'Outfit', 'Inter', 'Segoe UI', 'Roboto', sans-serif", color=Theme.text_main, size=15),
         xaxis=dict(gridcolor=Theme.border_light, linecolor=Theme.border_dark),
         yaxis=dict(gridcolor=Theme.border_light, linecolor=Theme.border_dark, title=yaxis_title),
         legend=dict(bgcolor=Theme.bg_glass, bordercolor=Theme.border_dark)
@@ -64,11 +106,20 @@ def render_metric_card(label: str, value: str, subvalue: str = "", delta: str = 
 
 def apply_custom_css():
     """カスタムCSSを適用する (ライトテーマ版)"""
+    # print("DEBUG: apply_custom_css() called") # Streamlit reload check
     st.markdown(f"""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;900&family=Inter:wght@400;600;700&display=swap');
     
     
+    :root {{
+        --st-background-color: {Theme.bg_main};
+        --st-secondary-background-color: {Theme.bg_hover};
+        --st-text-color: {Theme.text_main};
+    }}
+    body {{
+        background-color: {Theme.white} !important;
+    }}
     .stApp {{ 
         background: {Theme.bg_main}; 
         color: {Theme.text_main}; 
@@ -83,11 +134,11 @@ def apply_custom_css():
         background: {Theme.bg_glass};
         backdrop-filter: blur(12px);
         border: 1px solid rgba(226, 232, 240, 0.8);
-        border-radius: 16px;
-        padding: 24px;
+        border-radius: {Theme.radius_lg};
+        padding: {Theme.spacing_lg};
         transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         box-shadow: {Theme.shadow_sm};
-        margin-bottom: 20px;
+        margin-bottom: {Theme.spacing_md};
     }}
     .metric-card:hover {{ 
         transform: translateY(-4px); 
@@ -96,17 +147,17 @@ def apply_custom_css():
         box-shadow: {Theme.shadow_lg};
     }}
     
-    .metric-label {{ font-size: {Theme.size_md}; color: {Theme.text_muted}; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; font-family: 'Inter', sans-serif; }}
-    .metric-value {{ font-size: {Theme.size_2xl}; font-weight: 900; color: {Theme.text_dark}; margin: 8px 0; font-family: 'Outfit', 'Segoe UI', sans-serif; }}
+    .metric-label {{ font-size: {Theme.font_size_metric_label}; color: {Theme.text_muted}; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; font-family: 'Inter', sans-serif; }}
+    .metric-value {{ font-size: {Theme.font_size_metric}; font-weight: 900; color: {Theme.text_dark}; margin: {Theme.spacing_xs} 0; font-family: 'Outfit', 'Segoe UI', sans-serif; }}
     .metric-sub {{ font-size: {Theme.size_md}; color: {Theme.text_muted}; font-weight: 500; font-family: 'Inter', sans-serif; }}
     
-    .badge-up {{ background: rgba(34, 197, 94, 0.15); color: {Theme.badge_green_text}; padding: 4px 10px; border-radius: 999px; font-size: {Theme.size_sm}; font-weight: 700; border: 1px solid rgba(34, 197, 94, 0.3); }}
-    .badge-down {{ background: rgba(239, 68, 68, 0.15); color: {Theme.badge_red_text}; padding: 4px 10px; border-radius: 999px; font-size: {Theme.size_sm}; font-weight: 700; border: 1px solid rgba(239, 68, 68, 0.3); }}
-    .badge-brake {{ background: rgba(245, 158, 11, 0.15); color: #b45309; padding: 4px 10px; border-radius: 999px; font-size: {Theme.size_xs}; font-weight: 800; border: 1px solid rgba(245, 158, 11, 0.3); margin-top: 10px; display: inline-block; }}
+    .badge-up {{ background: rgba(34, 197, 94, 0.15); color: {Theme.badge_green_text}; padding: {Theme.spacing_xs} 10px; border-radius: 999px; font-size: {Theme.size_sm}; font-weight: 700; border: 1px solid rgba(34, 197, 94, 0.3); }}
+    .badge-down {{ background: rgba(239, 68, 68, 0.15); color: {Theme.badge_red_text}; padding: {Theme.spacing_xs} 10px; border-radius: 999px; font-size: {Theme.size_sm}; font-weight: 700; border: 1px solid rgba(239, 68, 68, 0.3); }}
+    .badge-brake {{ background: rgba(245, 158, 11, 0.15); color: #b45309; padding: {Theme.spacing_xs} 10px; border-radius: 999px; font-size: {Theme.size_xs}; font-weight: 800; border: 1px solid rgba(245, 158, 11, 0.3); margin-top: 10px; display: inline-block; }}
     
     /* タブ・サイドバーの装飾 (ライト) */
-    .stTabs [data-baseweb="tab-list"] {{ gap: 10px; background: {Theme.bg_tab_list}; padding: 5px; border-radius: 12px; }}
-    .stTabs [data-baseweb="tab"] {{ height: 45px; border-radius: 8px; color: {Theme.text_sec}; transition: all 0.2s; border: none; font-weight: 600; }}
+    .stTabs [data-baseweb="tab-list"] {{ gap: 10px; background: {Theme.bg_tab_list}; padding: 5px; border-radius: {Theme.radius_md}; }}
+    .stTabs [data-baseweb="tab"] {{ height: 45px; border-radius: {Theme.radius_sm}; color: {Theme.text_sec}; transition: all 0.2s; border: none; font-weight: 600; }}
     .stTabs [aria-selected="true"] {{ background: {Theme.white}; color: {Theme.text_dark}; font-weight: 800; box-shadow: {Theme.shadow_sm}; }}
     
     /* ナビゲーション用のラジオボタン（疑似タブ）をモダンなボタン・タブ風に整形 */
@@ -120,7 +171,7 @@ def apply_custom_css():
         gap: 8px;
         background: {Theme.bg_tab_list};
         padding: 6px;
-        border-radius: 12px;
+        border-radius: {Theme.radius_md};
         border: 1px solid {Theme.border_light};
         width: 100%;
         box-shadow: inset 0 2px 4px 0 rgba(0, 0, 0, 0.02);
@@ -128,7 +179,7 @@ def apply_custom_css():
     
     div[data-testid="stRadio"] div[aria-label="MainNavigation"] label[data-baseweb="radio"] {{
         padding: 8px 20px !important;
-        border-radius: 10px !important;
+        border-radius: {Theme.radius_sm} !important;
         transition: all 0.25s ease !important;
         cursor: pointer !important;
         border: 1px solid transparent !important;
@@ -185,9 +236,9 @@ def apply_custom_css():
     }}
     
     .alert-box {{
-        padding: 12px 20px;
-        border-radius: 12px;
-        margin-bottom: 20px;
+        padding: {Theme.spacing_sm} {Theme.spacing_md};
+        border-radius: {Theme.radius_md};
+        margin-bottom: {Theme.spacing_md};
         display: flex;
         align-items: center;
         gap: 12px;
@@ -198,7 +249,7 @@ def apply_custom_css():
     .alert-warning {{ background: {Theme.alert_warning_bg}; border: 1px solid {Theme.alert_warning_border}; color: {Theme.alert_warning_text}; }}
     .alert-danger {{ background: {Theme.badge_red_bg}; border: 1px solid #fecaca; color: {Theme.badge_red_text}; }}
     .alert-info {{ background: {Theme.alert_info_bg}; border: 1px solid {Theme.alert_info_border}; color: {Theme.alert_info_text}; }}
-    .alert-icon {{ font-size: 1.2rem; }}
+    .alert-icon {{ font-size: 1.4rem; }}
 
     /* ─── サイドバー ─────────────────────────────────── */
     [data-testid="stSidebar"] {{
@@ -229,10 +280,22 @@ def apply_custom_css():
     .stTextInput input, .stSelectbox select,
     div[data-baseweb="select"] > div,
     div[data-baseweb="input"] > div,
-    div[data-baseweb="textarea"] > div {{
+    div[data-baseweb="textarea"] > div,
+    div[data-testid="stDateInput"] input {{
         background-color: {Theme.white} !important;
         border-color: {Theme.border_dark} !important;
         color: {Theme.text_main} !important;
+    }}
+    
+    /* 入力値とラベルの視認性確保 (ブラウザ設定に依存しないよう徹底) */
+    div[data-testid="stDateInput"] input,
+    div[data-testid="stTextInput"] input,
+    div[data-baseweb="input"] input {{
+        color: {Theme.text_dark} !important;
+        -webkit-text-fill-color: {Theme.text_dark} !important;
+    }}
+    div[data-testid="stWidgetLabel"] label p {{
+        color: {Theme.text_sec} !important;
     }}
     /* マルチセレクトのタグ */
     [data-baseweb="tag"] {{
@@ -250,9 +313,26 @@ def apply_custom_css():
     ul[role="listbox"] li:hover {{
         background: {Theme.bg_hover} !important;
     }}
-    /* スライダー */
-    div[data-testid="stSlider"] .st-ae {{
-        background: {Theme.primary} !important;
+    /* スライダーのつまみと選択されたトラックの色をテーマカラーに合わせる */
+    div[data-testid="stSlider"] [data-testid="stThumb"],
+    div[data-testid="stSlider"] [style*="background: rgb(255, 75, 75)"] {{
+        background-color: {Theme.primary} !important;
+    }}
+
+    /* ─── st.data_editor の強制ライト化 ─── */
+    /* Glide Data Grid のコンテナ */
+    .stDataFrameGlideDataEditor,
+    .dvn-scroller,
+    [class*="gdg-"] {{
+        background-color: {Theme.white} !important;
+        color: {Theme.text_main} !important;
+    }}
+    /* data_editor のコンテナラッパー */
+    [data-testid="stDataEditor"] > div {{
+        background-color: {Theme.white} !important;
+    }}
+    [data-testid="stDataEditor"] canvas {{
+        filter: none !important;
     }}
 
     /* ─── Streamlit デフォルトUI（dataframe, buttonなど）のライト化 ── */
@@ -261,7 +341,7 @@ def apply_custom_css():
         background: {Theme.primary} !important;
         color: {Theme.white} !important;
         border: none !important;
-        border-radius: 8px !important;
+        border-radius: {Theme.radius_sm} !important;
         font-weight: 600 !important;
     }}
     .stButton > button:hover {{
@@ -271,26 +351,19 @@ def apply_custom_css():
     [data-testid="stExpander"], details {{
         background-color: #ffffff !important;
         border: 1px solid {Theme.border_light} !important;
-        border-radius: 8px !important;
+        border-radius: {Theme.radius_sm} !important;
     }}
     details summary {{
         background-color: #ffffff !important;
         color: {Theme.text_main} !important;
         font-weight: 600 !important;
         padding: 10px !important;
-        border-radius: 8px !important;
+        border-radius: {Theme.radius_sm} !important;
     }}
     details[open] summary {{
         color: {Theme.primary_hover} !important;
     }}
     
-    /* dataframe and data_editor */
-    [data-testid="stDataFrame"], [data-testid="stDataEditor"], .stDataFrame, .stDataEditor {{
-        background-color: {Theme.bg_card} !important;
-    }}
-    [data-testid="stDataFrame"] *, [data-testid="stDataEditor"] * {{
-        color: {Theme.chart_text} !important;
-    }}
     /* アプリ全体のメイン背景色を強制的に白/ライト系にする */
     .stApp, .stApp > header, .main {{
         background-color: {Theme.bg_main} !important;
@@ -298,7 +371,7 @@ def apply_custom_css():
 
     /* info/warning/success メッセージボックス */
     div[data-testid="stAlert"] {{
-        border-radius: 10px !important;
+        border-radius: {Theme.radius_sm} !important;
     }}
     /* caption */
     div[data-testid="stCaptionContainer"] p {{

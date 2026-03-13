@@ -33,7 +33,10 @@ from typing import Optional
 
 from constants import (
     MAX_DISCOUNT_PCT, MAX_MARKUP_PCT, 
-    BRAKE_THRESHOLD, BRAKE_STRENGTH_PCT
+    BRAKE_THRESHOLD, BRAKE_STRENGTH_PCT,
+    INV_THRESHOLD_PREMIUM, INV_THRESHOLD_HIGH, INV_THRESHOLD_NORMAL,
+    TIME_THRESHOLD_LAST_MIN, TIME_THRESHOLD_PEAK, TIME_THRESHOLD_NORMAL,
+    PRICE_ROUNDING_UNIT
 )
 
 DATABASE = 'inventory.db'
@@ -60,15 +63,15 @@ def calc_inventory_adjustment(base_price: int, inv_ratio: float, config: Optiona
     high_pct = conf.get('rule_inv_high_pct', 10) / 100.0
     discount_pct = conf.get('rule_inv_discount_pct', -15) / 100.0
 
-    if inv_ratio < 0.20:
+    if inv_ratio < conf.get('inv_threshold_premium', INV_THRESHOLD_PREMIUM):
         # 残20%未満: 希少プレミアム
         adj = round(base_price * premium_pct)
         reason = f"在庫残{int(inv_ratio*100)}%のため希少プレミアム({'%s' % ('+' if adj>0 else '')}¥{adj:,})"
-    elif inv_ratio < 0.50:
+    elif inv_ratio < conf.get('inv_threshold_high', INV_THRESHOLD_HIGH):
         # 残20〜50%: 軽微な需要圧
         adj = round(base_price * high_pct)
         reason = f"在庫残{int(inv_ratio*100)}%のため需要増加調整({'%s' % ('+' if adj>0 else '')}¥{adj:,})"
-    elif inv_ratio < 0.70:
+    elif inv_ratio < conf.get('inv_threshold_normal', INV_THRESHOLD_NORMAL):
         # 残50〜70%: 標準（調整なし）
         adj = 0
         reason = f"在庫残{int(inv_ratio*100)}%のため標準価格（調整なし）"
@@ -105,16 +108,16 @@ def calc_time_adjustment(base_price: int, lead_days: int, config: Optional[dict]
     if lead_days < 0:
         # 出発済み → 価格無効
         return 0, "出発済み（価格計算対象外）"
-    elif lead_days <= 7:
+    elif lead_days <= conf.get('time_threshold_last_min', TIME_THRESHOLD_LAST_MIN):
         # 0〜7日: 直前割引（最終在庫の取りこぼし防止）
         adj = round(base_price * last_min_pct)
         sign = "-" if adj < 0 else ("+" if adj > 0 else "")
         reason = f"出発まで{lead_days}日のため直前割引({sign}¥{abs(adj):,})"
-    elif lead_days <= 30:
+    elif lead_days <= conf.get('time_threshold_peak', TIME_THRESHOLD_PEAK):
         # 8〜30日: 需要ピーク・決断促進
         adj = round(base_price * peak_pct)
         reason = f"出発まで{lead_days}日のため需要ピーク調整({'%s' % ('+' if adj>0 else '')}¥{adj:,})"
-    elif lead_days <= 90:
+    elif lead_days <= conf.get('time_threshold_normal', TIME_THRESHOLD_NORMAL):
         # 31〜90日: 標準
         adj = 0
         reason = f"出発まで{lead_days}日のため標準価格（調整なし）"
@@ -465,10 +468,10 @@ def calculate_pricing_result(
         waterfall = []
 
     # ── 最終価格（上下限: config に基づくクランプ）────────────
-    final_price  = round(theoretical / 100) * 100          # 100円単位
+    final_price  = round(theoretical / PRICE_ROUNDING_UNIT) * PRICE_ROUNDING_UNIT          # 指定単位で丸め
 
-    min_p = round(base_price * (1.0 - max_discount) / 100) * 100
-    max_p = round(base_price * (1.0 + max_markup) / 100) * 100
+    min_p = round(base_price * (1.0 - max_discount) / PRICE_ROUNDING_UNIT) * PRICE_ROUNDING_UNIT
+    max_p = round(base_price * (1.0 + max_markup) / PRICE_ROUNDING_UNIT) * PRICE_ROUNDING_UNIT
     
     final_price = max(final_price, min_p)
     final_price = min(final_price, max_p)

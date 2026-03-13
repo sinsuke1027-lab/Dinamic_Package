@@ -6,7 +6,10 @@ import math # 追加
 from constants import (
     DEFAULT_COST_RATIO, FORECAST_MULTIPLIERS,
     BUNDLE_VELOCITY_BOOST, BUNDLE_THRESHOLD, BUNDLE_DISCOUNT_RATE,
-    CANNIBALIZATION_RATE
+    CANNIBALIZATION_RATE,
+    HOTEL_URGENCY_TIME_WEIGHT, HOTEL_URGENCY_INV_WEIGHT, HOTEL_URGENCY_MAX_DAYS,
+    VELOCITY_ADJ_HIGH_2_THRESHOLD, VELOCITY_ADJ_HIGH_1_THRESHOLD, VELOCITY_ADJ_LOW_THRESHOLD,
+    VELOCITY_ADJ_HIGH_2_RATE, VELOCITY_ADJ_HIGH_1_RATE, VELOCITY_ADJ_LOW_RATE
 )
 
 # データベースへの相対パス
@@ -55,24 +58,24 @@ def hotel_urgency_score(remaining_stock: int, total_stock: int, lead_days: int) 
     """ホテルの切迫度スコア (0.0 - 1.0)"""
     inv_ratio = remaining_stock / total_stock if total_stock > 0 else 0
     # 残り日数が少ないほど、在庫が多いほどスコアが高くなる
-    time_factor = max(0, 1.0 - (lead_days / 30.0))
+    time_factor = max(0, 1.0 - (lead_days / HOTEL_URGENCY_MAX_DAYS))
     inv_factor = inv_ratio
-    return (inv_factor * 0.7 + time_factor * 0.3)
+    return (inv_factor * HOTEL_URGENCY_INV_WEIGHT + time_factor * HOTEL_URGENCY_TIME_WEIGHT)
 
 def calc_velocity_adjustment(dynamic_price: int, velocity_ratio: Optional[float]) -> tuple[int, str]:
     """販売速度に基づいた価格調整額を算出する"""
     if velocity_ratio is None:
         return 0, "分析データなし"
     
-    if velocity_ratio >= 2.0:
-        adj = int(dynamic_price * 0.10)
-        return adj, f"売れすぎ({velocity_ratio:.1f}x) → 値上げ(+10%)"
-    elif velocity_ratio >= 1.5:
-        adj = int(dynamic_price * 0.05)
-        return adj, f"好調({velocity_ratio:.1f}x) → 値上げ(+5%)"
-    elif velocity_ratio <= 0.3:
-        adj = int(dynamic_price * -0.05)
-        return adj, f"鈍化({velocity_ratio:.1f}x) → 値下げ(-5%)"
+    if velocity_ratio >= VELOCITY_ADJ_HIGH_2_THRESHOLD:
+        adj = int(dynamic_price * VELOCITY_ADJ_HIGH_2_RATE)
+        return adj, f"売れすぎ({velocity_ratio:.1f}x) → 値上げ(+{int(VELOCITY_ADJ_HIGH_2_RATE*100)}%)"
+    elif velocity_ratio >= VELOCITY_ADJ_HIGH_1_THRESHOLD:
+        adj = int(dynamic_price * VELOCITY_ADJ_HIGH_1_RATE)
+        return adj, f"好調({velocity_ratio:.1f}x) → 値上げ(+{int(VELOCITY_ADJ_HIGH_1_RATE*100)}%)"
+    elif velocity_ratio <= VELOCITY_ADJ_LOW_THRESHOLD:
+        adj = int(dynamic_price * VELOCITY_ADJ_LOW_RATE)
+        return adj, f"鈍化({velocity_ratio:.1f}x) → 値下げ({int(VELOCITY_ADJ_LOW_RATE*100)}%)"
     return 0, "安定"
 
 def calculate_roi_metrics(
