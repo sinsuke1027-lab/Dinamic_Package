@@ -486,9 +486,39 @@ if selected_tab == "🔍 販売推移と実績分析":
         scenario_multiplier = FORECAST_MULTIPLIERS.get(ana_scenario, 1.0)
 
     with col_pred:
-        pred_strategy = st.radio("予測アルゴリズム:", ["現在の価格戦略を継続", "需要予測ベース戦略を適用"], horizontal=True)
+        import os, sys
+        sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+        from model_evaluator import get_product_classification, get_model_setting
+        
+        cls_data = get_product_classification(inv_sel["name"], inv_sel["item_type"])
+        char = cls_data["characteristic"] if cls_data else "stable"
+        saved_setting = get_model_setting(inv_sel["item_type"], char)
+        
+        is_registered = saved_setting is not None
+        if is_registered:
+            applied_strategy_choice = saved_setting["strategy"]
+            applied_config_choice = saved_setting["config"]
+            
+            label_html = f"<div style='font-size: 14px; margin-bottom: 8px; font-weight: 600; color: #31333F;'>登録モデル: <span style='font-weight: normal; color: #4F46E5;'>{char} 特性 / {'ルールベース' if applied_strategy_choice == 'rule_based' else '需要予測ベース'}</span></div>"
+            st.markdown(label_html, unsafe_allow_html=True)
+            with st.expander("モデル詳細パラメータ", expanded=False):
+                st.json(applied_config_choice)
+        else:
+            applied_strategy_choice = "rule_based"
+            applied_config_choice = ai_config
+            
+            label_html = "<div style='font-size: 14px; margin-bottom: 8px; font-weight: 600; color: #31333F;'>登録モデル: <span style='font-weight: normal; color: #64748B;'>未設定 (デフォルト適用)</span></div>"
+            st.markdown(label_html, unsafe_allow_html=True)
+            with st.expander("デフォルトパラメータ", expanded=False):
+                st.json(applied_config_choice)
+                
+        if applied_strategy_choice == "rule_based":
+            pred_strategy = "現在の価格戦略を継続"
+        else:
+            pred_strategy = "需要予測ベース戦略を適用"
 
     with col_compare:
+        st.markdown("<div style='height: 32px;'></div>", unsafe_allow_html=True)
         show_baseline = st.checkbox("定価比較", value=False)
     
     # 過去実績の期間設定 (NameError回避のため復元)
@@ -1832,50 +1862,23 @@ elif selected_tab == "🔬 モデル性能評価と最適化選択":
         })
     cls_df = pd.DataFrame(cls_records)
 
-    # セッションステートで編集内容を管理（st.data_editor の代替）
-    if "cls_edits" not in st.session_state or st.session_state.get("cls_df_hash") != str(hash(str(cls_df.values.tolist()))):
-        st.session_state["cls_edits"] = {f"{r['商品種別']}:{r['商品名']}": r["特性 (クリックで変更)"] for _, r in cls_df.iterrows()}
-        st.session_state["cls_df_hash"] = str(hash(str(cls_df.values.tolist())))
-
-    # 現在の分類をライトテーマで表示
-    disp_cls_df = cls_df.copy()
-    disp_cls_df["特性 (クリックで変更)"] = [
-        st.session_state["cls_edits"].get(f"{r['商品種別']}:{r['商品名']}", r["特性 (クリックで変更)"])
-        for _, r in cls_df.iterrows()
-    ]
-    st.dataframe(light_dataframe(disp_cls_df), use_container_width=True, hide_index=True)
-
-    # 各商品の特性を個別に変更
-    with st.expander("✏️ 特性を個別に変更する", expanded=False):
-        edited_cls_records = []
-        for _, row in cls_df.iterrows():
-            key = f"{row['商品種別']}:{row['商品名']}"
-            current_char = st.session_state["cls_edits"].get(key, row["特性 (クリックで変更)"])
-            char_options = ["popular", "stable", "niche"]
-            new_char = st.selectbox(
-                f"{row['商品種別']} | {row['商品名']}",
-                options=char_options,
-                index=char_options.index(current_char) if current_char in char_options else 1,
-                key=f"cls_select_{key}"
-            )
-            st.session_state["cls_edits"][key] = new_char
-            edited_cls_records.append({
-                "商品種別": row["商品種別"],
-                "商品名": row["商品名"],
-                "特性 (クリックで変更)": new_char,
-                "設定元": "manual"
-            })
-
-    # edited_cls_df をセッションステートから再構築（後続コードとの互換性維持）
-    edited_cls_df = pd.DataFrame([
-        {
-            "商品種別": r["商品種別"],
-            "商品名": r["商品名"],
-            "特性 (クリックで変更)": st.session_state["cls_edits"].get(f"{r['商品種別']}:{r['商品名']}", r["特性 (クリックで変更)"]),
-            "設定元": "manual"
+    # st.data_editor を用いて直接編集可能な表を表示
+    edited_cls_df = st.data_editor(
+        cls_df,
+        use_container_width=True,
+        hide_index=True,
+        column_config={
+            "商品種別": st.column_config.TextColumn("商品種別", disabled=True),
+            "商品名": st.column_config.TextColumn("商品名", disabled=True),
+            "特性 (クリックで変更)": st.column_config.SelectboxColumn(
+                "特性",
+                help="商品特性を変更（モデル推論の基準になります）",
+                options=["popular", "stable", "niche"],
+                required=True,
+            ),
+            "設定元": st.column_config.TextColumn("設定元", disabled=True),
         }
-        for _, r in cls_df.iterrows()
-    ])
+    )
 
     if st.button("💾 分類マスタを保存", type="primary"):
         with st.spinner("DBに分類を保存中..."):

@@ -319,21 +319,7 @@ def apply_custom_css():
         background-color: {Theme.primary} !important;
     }}
 
-    /* ─── st.data_editor の強制ライト化 ─── */
-    /* Glide Data Grid のコンテナ */
-    .stDataFrameGlideDataEditor,
-    .dvn-scroller,
-    [class*="gdg-"] {{
-        background-color: {Theme.white} !important;
-        color: {Theme.text_main} !important;
-    }}
-    /* data_editor のコンテナラッパー */
-    [data-testid="stDataEditor"] > div {{
-        background-color: {Theme.white} !important;
-    }}
-    [data-testid="stDataEditor"] canvas {{
-        filter: none !important;
-    }}
+    /* st.data_editor に関する強制上書きスタイルを削除（描画面が真っ白になる不具合の原因と思われるため） */
 
     /* ─── Streamlit デフォルトUI（dataframe, buttonなど）のライト化 ── */
     /* ボタン */
