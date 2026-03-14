@@ -59,9 +59,12 @@ def calc_inventory_adjustment(base_price: int, inv_ratio: float, config: Optiona
         (調整額（円）, 理由テキスト)
     """
     conf = config or {}
-    premium_pct = conf.get('rule_inv_premium_pct', 30) / 100.0
+    # UI側のパラメータ名 (rare_premium, abundant_discount) を優先し、なければ従来の内部名を使用
+    premium_pct = conf.get('rare_premium', conf.get('rule_inv_premium_pct', 130) / 100.0) - 1.0
     high_pct = conf.get('rule_inv_high_pct', 10) / 100.0
-    discount_pct = conf.get('rule_inv_discount_pct', -15) / 100.0
+    discount_pct = 1.0 - conf.get('abundant_discount', 1.0 - (conf.get('rule_inv_discount_pct', -15) / 100.0))
+    # 正負の補正
+    discount_pct = -abs(discount_pct) 
 
     if inv_ratio < conf.get('inv_threshold_premium', INV_THRESHOLD_PREMIUM):
         # 残20%未満: 希少プレミアム
@@ -101,8 +104,10 @@ def calc_time_adjustment(base_price: int, lead_days: int, config: Optional[dict]
         (調整額（円）, 理由テキスト)
     """
     conf = config or {}
-    last_min_pct = conf.get('rule_time_last_min_pct', -15) / 100.0
-    peak_pct = conf.get('rule_time_peak_pct', 10) / 100.0
+    # UI側のパラメータ名 (last_minute_discount, peak_markup) を優先
+    last_min_pct = 1.0 - conf.get('last_minute_discount', 1.0 - (conf.get('rule_time_last_min_pct', -15) / 100.0))
+    last_min_pct = -abs(last_min_pct)
+    peak_pct = conf.get('peak_markup', 1.0 + (conf.get('rule_time_peak_pct', 10) / 100.0)) - 1.0
     early_pct = conf.get('rule_time_early_pct', -10) / 100.0
 
     if lead_days < 0:
@@ -142,6 +147,7 @@ def calc_demand_based_pricing(
     lead_days: int,
     elasticity: float = -1.5,
     reference_date: Optional[date] = None,
+    target_sell_rate: float = 1.0
 ) -> tuple[int, str, float, float]:
     """
     需要予測と価格弾力性に基づいて最適価格調整額を逆算する。
@@ -150,7 +156,11 @@ def calc_demand_based_pricing(
         return 0, "計算対象外（在庫なし or 出発済み）", 0.0, 0.0
 
     # 1. 目標販売ペース (Target Velocity) 1日あたり
-    target_velocity = remaining_stock / lead_days
+    # 目標販売率を考慮: (総在庫 * 目標率 - 既販数) / 残り日数
+    sold_so_far = total_stock - remaining_stock
+    target_total_sales = total_stock * target_sell_rate
+    target_remaining_sales = max(0, target_total_sales - sold_so_far)
+    target_velocity = target_remaining_sales / lead_days if lead_days > 0 else 0
 
     # 2. 現在の販売ペース (Current Velocity) 直近の販売実績から
     try:
@@ -186,15 +196,16 @@ def calc_demand_based_pricing(
 # 在庫資産価値の減衰（崖っぷち型カーブ）
 # ─────────────────────────────────────────
 
-def calculate_inventory_decay_factor(lead_days: int, total_lead_days: int, k: float = 20.0, p: float = 0.12) -> float:
+def calculate_inventory_decay_factor(lead_days: int, total_lead_days: int, k: float = 20.0, p: float = 0.12, pattern: str = "standard") -> float:
     """
-    在庫の残存価値係数を、シグモイド関数の反転（ロジスティック関数）を用いて計算する。
+    在庫の残存価値係数を計算する。
     
     Args:
         lead_days:       出発までの残り日数 (Day X)
         total_lead_days: 全体のリードタイム (Day max)
-        k:               急落の鋭さ (Steepness)
-        p:               崖っぷちの発生ポイント (0.0=出発日, 1.0=予約開始日。例: 0.12 なら残り12%から急落)
+        k:               急落の鋭さ (Steepness) ※standard時のみ
+        p:               崖っぷちの発生ポイント (0.0〜1.0) ※standard時のみ
+        pattern:         "standard" (S字) or "linear" (線形)
         
     Returns:
         0.0〜1.0 の係数
@@ -206,6 +217,49 @@ def calculate_inventory_decay_factor(lead_days: int, total_lead_days: int, k: fl
         
     # 正規化した残り日数 (1.0 = 遠い未来, 0.0 = 出発当日)
     x = lead_days / total_lead_days
+
+    if pattern == "linear":
+        # シンプルな線形減少
+        return max(0.0, min(1.0, x))
+    
+    if pattern == "concave":
+        # 凹型 (初動が緩やか、後半に加速)
+        return max(0.0, min(1.0, math.sqrt(x)))
+    
+    if pattern == "convex":
+        # 凸型 (初動が急、後半に緩やか) -> Early Rush
+        return max(0.0, min(1.0, x * x))
+    
+    if pattern == "sigmoid":
+        # S字曲線 (中央付近で急落)
+        k, p = 15.0, 0.5
+    
+    if pattern == "early_rush":
+        # 早期ラッシュ (崖が手前)
+        k, p = 20.0, 0.8
+    
+    if pattern == "last_minute_rush":
+        # 直前ラッシュ (崖が後ろ)
+        k, p = 20.0, 0.2
+    
+    if pattern == "bimodal":
+        # 双峰型 (早期と直前に山がある)
+        # 2つのシグモイドの合成
+        try:
+            # 早期 (p=0.7)
+            exp1 = math.exp(-15.0 * (x - 0.7))
+            d1 = 1.0 / (1.0 + exp1)
+            # 直前 (p=0.2)
+            exp2 = math.exp(-15.0 * (x - 0.2))
+            d2 = 1.0 / (1.0 + exp2)
+            # 正規化 (x=1.0 で 1.0, x=0.0 で 0.0 に近づけるため単純平均ではなく調整)
+            decay = (d1 + d2) / 2.0
+            # スケーリング用の端点計算
+            f_high = (1.0/(1.0+math.exp(-15.0*(1.0-0.7))) + 1.0/(1.0+math.exp(-15.0*(1.0-0.2))))/2.0
+            f_low  = (1.0/(1.0+math.exp(-15.0*(0.0-0.7))) + 1.0/(1.0+math.exp(-15.0*(0.0-0.2))))/2.0
+            return max(0.0, min(1.0, (decay - f_low) / (f_high - f_low)))
+        except OverflowError:
+            return x # フォールバック
     
     # ロジスティック関数の反転: 1 / (1 + exp(-k * (x - p)))
     # これにより、x=p 付近で 1.0 から 0.0 へ急激に変化する
@@ -431,7 +485,7 @@ def calculate_pricing_result(
             {"label": "速度調整", "value": vel_adj,      "measure": "relative"}
         ]
 
-    elif strategy == "demand_based":
+    elif strategy in ["demand_based", "demand_forecast"]:
         try:
             from packaging_engine import get_velocity_ratio
             if lead_days:
@@ -439,14 +493,20 @@ def calculate_pricing_result(
         except Exception:
             pass
 
+        # 需要倍率 (Demand Multiplier) の適用
+        multiplier = conf.get("demand_multiplier", 1.0)
+        target_sr = conf.get("target_sell_rate", 1.0)
         adj_amount, act_reason, target_vel, current_vel = calc_demand_based_pricing(
-            inventory_id, base_price, total_stock, remaining_stock, lead_days, elasticity, reference_date=reference_date
+            inventory_id, base_price, total_stock, remaining_stock, lead_days, elasticity, 
+            reference_date=reference_date, target_sell_rate=target_sr
         )
+        adj_amount = round(adj_amount * multiplier)
         demand_adj = adj_amount
         if lead_days is not None:
             k = conf.get("decay_k", 20.0)
             p = conf.get("decay_p", 0.12)
-            decay_factor = calculate_inventory_decay_factor(lead_days, 90, k=k, p=p)
+            pattern = conf.get("decay_pattern", "standard")
+            decay_factor = calculate_inventory_decay_factor(lead_days, 90, k=k, p=p, pattern=pattern)
             decay_adj = round((base_price + demand_adj) * (decay_factor - 1.0))
             
             if decay_factor < 0.95:

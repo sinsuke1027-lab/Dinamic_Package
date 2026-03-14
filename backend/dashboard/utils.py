@@ -287,13 +287,25 @@ def apply_custom_css():
         color: {Theme.text_main} !important;
     }}
     
-    /* 入力値とラベルの視認性確保 (ブラウザ設定に依存しないよう徹底) */
-    div[data-testid="stDateInput"] input,
-    div[data-testid="stTextInput"] input,
-    div[data-baseweb="input"] input {{
+    /* ─── 入力ウィジェット全般のテキスト色を強制隔離 ── */
+    /* あらゆる入力フィールド、プルダウン、日付選択のテキストを強制的に黒にする */
+    /* .st-bb は Streamlit の内部的な入力フィールドの色設定 */
+    .stApp .main input,
+    .stApp .main select,
+    .stApp .main textarea,
+    .stApp .main [data-baseweb="input"] input,
+    .stApp .main [data-baseweb="select"] div,
+    .stApp .main [data-testid="stDateInput"] input,
+    .stApp .main div[class*="datepicker"] input,
+    .stApp .main div[role="combobox"],
+    .stApp .main .st-bb,
+    .stApp .main [data-baseweb="base-input"] input {{
         color: {Theme.text_dark} !important;
         -webkit-text-fill-color: {Theme.text_dark} !important;
+        background-color: {Theme.white} !important;
+        opacity: 1 !important;
     }}
+    
     div[data-testid="stWidgetLabel"] label p {{
         color: {Theme.text_sec} !important;
     }}
@@ -324,14 +336,16 @@ def apply_custom_css():
     /* ─── Streamlit デフォルトUI（dataframe, buttonなど）のライト化 ── */
     /* ボタン */
     .stButton > button {{
-        background: {Theme.primary} !important;
-        color: {Theme.white} !important;
-        border: none !important;
+        background: {Theme.primary_alpha} !important;
+        color: {Theme.primary} !important;
+        border: 1px solid {Theme.primary_border} !important;
         border-radius: {Theme.radius_sm} !important;
         font-weight: 600 !important;
     }}
     .stButton > button:hover {{
-        background: {Theme.primary_hover} !important;
+        background: {Theme.primary_alpha.replace('0.1', '0.2')} !important;
+        color: {Theme.primary_hover} !important;
+        border-color: {Theme.primary} !important;
     }}
     /* expander */
     [data-testid="stExpander"], details {{

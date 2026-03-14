@@ -9,8 +9,9 @@ import sqlite3
 import pandas as pd
 import numpy as np
 import json
-from datetime import datetime, date, timezone
+from datetime import datetime, date, timezone, timedelta
 import math
+from typing import Optional
 
 from pricing_engine import calc_inventory_adjustment, calc_time_adjustment, calculate_inventory_decay_factor
 from constants import (
@@ -120,6 +121,30 @@ def save_model_setting(item_type: str, characteristic: str, strategy: str, confi
     conn.commit()
     conn.close()
 
+# ─── 評価指標: DTW (Dynamic Time Warping) ─────────────────────────
+
+def calculate_dtw_distance(s1: list, s2: list, window: int = 10) -> float:
+    """
+    2つの時系列データの距離を動的時間伸縮法(DTW)で計算する。
+    s1, s2 は 0.0〜1.0 の累積販売率のリスト。
+    """
+    n, m = len(s1), len(s2)
+    if n == 0 or m == 0:
+        return 0.0
+        
+    # DPテーブルの初期化 (無限大で埋める)
+    dtw = np.full((n + 1, m + 1), np.inf)
+    dtw[0, 0] = 0
+    
+    # 窓サイズ（Sakoe-Chiba Band）の制限
+    w = max(window, abs(n - m))
+    
+    for i in range(1, n + 1):
+        for j in range(max(1, i - w), min(m + 1, i + w)):
+            cost = abs(s1[i-1] - s2[j-1])
+            dtw[i, j] = cost + min(dtw[i-1, j], dtw[i, j-1], dtw[i-1, j-1])
+            
+    return dtw[n, m] / max(n, m) # 正規化
 
 # ─── バックテスト・推論エンジン ─────────────────────────────────────────
 
@@ -136,7 +161,9 @@ def backtest_strategy(strategy: str, inv_row: pd.Series, booking_events: pd.Data
     """
     total_stock = inv_row["total_stock"]
     base_price = inv_row["base_price"]
-    elasticity_val = abs(inv_row.get("elasticity", 1.5))
+    
+    # 弾力性の優先順位: config > マスタ値
+    elasticity_val = abs(config.get("elasticity", inv_row.get("elasticity", 1.5)))
     
     # 経過日数の配列を作る (過去90日から0日まで)
     days = list(range(90, -1, -1))
@@ -172,57 +199,47 @@ def backtest_strategy(strategy: str, inv_row: pd.Series, booking_events: pd.Data
     prev_actual_demand = 0
     
     for d in days:
-        if sim_remaining <= 0:
-            break
+        # Note: Removing the 'if sim_remaining <= 0: break' to ensure fixed-length results for averaging
             
         actual_demand = daily_actual_sales.get(d, 0)
         actual_sales_so_far += actual_demand
         
-        # ─── [1] 新しい戦略に基づく価格計算
-        inv_ratio = sim_remaining / max(1, total_stock)
+        # ─── [1] 新しい戦略に基づく価格計算 (実際のエンジンを呼び出し)
+        from pricing_engine import calculate_pricing_result
         
-        if strategy == "rule_based":
-            adj_inv, _ = calc_inventory_adjustment(base_price, inv_ratio, config)
-            adj_time, _ = calc_time_adjustment(base_price, d, config)
-            curr_price = base_price + adj_inv + adj_time
-            # UI制御同様、上限下限をクリッピング（ルールベースの弱点でもある）
-            # 設定がconfigになければ定数でクリップ
-            max_mul = config.get("max_markup_pct", 80) / 100.0
-            min_mul = config.get("max_discount_pct", -40) / 100.0
-            curr_price = max(base_price * (1 + min_mul), min(curr_price, base_price * (1 + max_mul)))
-            
-        else: # demand_forecast
-            k = config.get("decay_k", 20.0)
-            p = config.get("decay_p", 0.12)
-            target_sr = config.get("target_sell_rate", 1.0)
-            decay = calculate_inventory_decay_factor(d, 90, k, p)
-            
-            # 期待される累計販売数 (最終的に total_stock * target_sr を目指す)
-            expected_sales = total_stock * target_sr * (1.0 - decay)
-            sales_so_far = total_stock - sim_remaining
-            
-            if sales_so_far > expected_sales:
-                # 目標より売れている → 値上げ
-                curr_price = base_price * 1.15
-            else:
-                # 鈍化 → 値下げ
-                curr_price = base_price * 0.85
-                
-            max_mul = config.get("max_markup_pct", 80) / 100.0
-            min_mul = config.get("max_discount_pct", -40) / 100.0
-            curr_price = max(base_price * (1 + min_mul), min(curr_price, base_price * (1 + max_mul)))
+        # 疑似在庫行
+        # エンジン内部で lead_days を再計算するため、reference_date を適切に設定する
+        
+        # エンジン実行 (キーワード引数で安全に呼び出し)
+        engine_res = calculate_pricing_result(
+            inventory_id=inv_row["id"],
+            name=inv_row["name"],
+            base_price=base_price,
+            total_stock=total_stock,
+            remaining_stock=sim_remaining,
+            departure_date=inv_row["departure_date"],
+            elasticity=elasticity_val,
+            reference_date=(dep_date - timedelta(days=d)).date(),
+            config=config,
+            strategy=strategy
+        )
+        curr_price = engine_res["final_price"]
             
         # ─── [2] 価格弾力性による仮想需要の計算
-        # 過去実績の需要が「当時の価格」によるものだが、ここでは簡略化して
-        # "base_price"での需要だったとみなし、そこからの価格変動率で増減させる
+        # 潜在需要の底上げ (Demand Smoothing): 
+        # 実績が0の日でも、価格を下げれば売れる可能性があるため、微小な値をベースにする
+        demand_floor = 0.05 
+        effective_actual = max(actual_demand, demand_floor)
+        
         price_ratio = base_price / curr_price if curr_price > 0 else 1.0
-        # 弾力性は「価格が1%下がれば、需要がN%上がる」
-        sim_demand_float = actual_demand * math.pow(price_ratio, elasticity_val)
+        demand_mul = config.get("demand_multiplier", 1.0)
         
-        # ランダム性（ポアソン的なゆらぎ）を避けるため、floatで計算し累積の端数で処理するが、今回はシンプルにround
-        sim_demand = int(round(sim_demand_float))
+        # 弾力性による増減を、底上げしたベースに対して計算
+        sim_demand_float = effective_actual * math.pow(price_ratio, elasticity_val) * demand_mul
         
-        # 在庫上限クリップ
+        # 整数化の際に確率的な丸め、または単純四捨五入
+        # ここではシミュレーションの安定性のため四捨五入（0.5以上で1件）
+        sim_demand = int(round(sim_demand_float)) if actual_demand > 0 or sim_demand_float > 0.5 else 0
         sim_demand = min(sim_demand, sim_remaining)
         
         # ─── [3] 状態更新
@@ -233,18 +250,19 @@ def backtest_strategy(strategy: str, inv_row: pd.Series, booking_events: pd.Data
         base_remaining -= base_demand
         base_revenue += (base_demand * base_price)
         
-        # ─── [4] MAPE用の予測率 vs 実績率 記録 (需要予測モデルでの「理想線」と実際の乖離)
+        # ─── [4] MAPE用の予測率 vs 実績率 記録
         target_sr = config.get("target_sell_rate", 1.0)
         if strategy == "demand_forecast":
             k_p = config.get("decay_k", 20.0)
             p_p = config.get("decay_p", 0.12)
-            decay_for_plot = calculate_inventory_decay_factor(d, 90, k_p, p_p)
+            pattern_p = config.get("decay_pattern", "standard")
+            decay_for_plot = calculate_inventory_decay_factor(d, 90, k_p, p_p, pattern=pattern_p)
             predicted_sales = total_stock * target_sr * (1.0 - decay_for_plot)
         else:
-            predicted_sales = total_stock * target_sr * (1.0 - (d / 90)) # ルールベースは線形とみなす
+            predicted_sales = total_stock * target_sr * (1.0 - (d / 90))
             
-        predicted_rates.append(predicted_sales / total_stock)
-        actual_rates.append(actual_sales_so_far / total_stock)
+        predicted_rates.append(predicted_sales / max(1, total_stock))
+        actual_rates.append(actual_sales_so_far / max(1, total_stock))
         tracked_days.append(d)
         
         # ─── [5] Directional Accuracy
@@ -298,9 +316,15 @@ def backtest_strategy(strategy: str, inv_row: pd.Series, booking_events: pd.Data
     # 4. Directional Accuracy
     dir_acc = (directional_correct / directional_count) * 100 if directional_count > 0 else 0
     
-    # 5. Composite Score
+    # 5. DTW Distance (Shape Similarity)
+    # 累積率リストの長さが揃っている前提 (tracked_daysが共通のため)
+    dtw_dist = calculate_dtw_distance(predicted_rates, actual_rates)
+    
+    # 6. Composite Score
     # MAPE: 0=100点, 20=0点
     score_mape = max(0, 100 - (mape * 5))
+    # DTW: 0=100点, 0.2=0点 (0.1程度が許容範囲)
+    score_dtw = max(0, 100 - (dtw_dist * 500))
     # Lift: 0=50点, +20%=100点
     score_lift = min(100, max(0, 50 + (revenue_lift * 2.5)))
     # Spoilage: 0=50点, +50%=100点
@@ -308,16 +332,25 @@ def backtest_strategy(strategy: str, inv_row: pd.Series, booking_events: pd.Data
     # Dir Acc: 0-100直結
     score_dir = dir_acc
     
-    composite = (score_mape     * config.get('score_weight_mape',     SCORE_WEIGHT_MAPE))     + \
-                (score_lift     * config.get('score_weight_lift',     SCORE_WEIGHT_LIFT))     + \
-                (score_spoilage * config.get('score_weight_spoilage', SCORE_WEIGHT_SPOILAGE)) + \
-                (score_dir      * config.get('score_weight_dir_acc',  SCORE_WEIGHT_DIR_ACC))
+    # ユーザー設定の重み（なければ波形重視のデフォルト値）
+    w_mape = config.get('score_weight_mape', 0.40)
+    w_dtw = config.get('score_weight_dtw', 0.30)
+    w_lift = config.get('score_weight_lift', 0.15)
+    w_spoil = config.get('score_weight_spoilage', 0.10)
+    w_dir = config.get('score_weight_dir_acc', 0.05)
+    
+    composite = (score_mape     * w_mape)  + \
+                (score_dtw      * w_dtw)   + \
+                (score_lift     * w_lift)  + \
+                (score_spoilage * w_spoil) + \
+                (score_dir      * w_dir)
     
     return {
         "mape": mape,
         "mae": mae,
         "rmse": rmse,
         "bias": bias,
+        "dtw_distance": round(dtw_dist, 4),
         "revenue_lift": round(revenue_lift, 1),
         "spoilage_reduction": round(spoilage_reduction, 1),
         "directional_accuracy": round(dir_acc, 1),

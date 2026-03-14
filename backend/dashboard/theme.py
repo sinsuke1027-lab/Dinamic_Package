@@ -65,9 +65,11 @@ class ThemeColors:
     border_dark = "#cbd5e1"     # 入力フォーム等の枠線カラー
     
     # ─── ブランド・アクセントカラー ───
-    primary = "#6366f1"         # ボタンや主要なUI（Indigo）
-    primary_hover = "#4f46e5"
-    chart_accent = "#a78bfa"    # グラフのメイン強調色（Purple）
+    primary = "#0ea5e9"         # ボタンや主要なUI（Sky Blue）
+    primary_hover = "#0284c7"
+    primary_alpha = "rgba(14, 165, 233, 0.1)"  # 透過性のある青（背景用）
+    primary_border = "rgba(14, 165, 233, 0.3)" # 透過性のある青（枠線用）
+    chart_accent = "#38bdf8"    # グラフのメイン強調色（Light Blue）
     
     # ─── ステータスカラー ───
     success = "#10b981"         # 利益改善、成功など
@@ -80,29 +82,30 @@ class ThemeColors:
     # ─── セマンティック・アクション ───
     color_pos = "#16a34a"       # ポジティブ（成功、改善）
     color_pos_light = "#f0fdf4" # ポジティブ背景
+    color_pos_light_alpha = "rgba(22, 163, 74, 0.1)"
     color_neg = "#dc2626"       # ネガティブ（損失、悪化）
     color_neg_light = "#fff1f2" # ネガティブ背景
     
     # ─── グラデーション・透過色 ───
     grad_info = "linear-gradient(135deg,#e0f2fe 0%,#bae6fd 100%)"
-    border_info_alpha = "rgba(2,132,199,0.3)"
-    shadow_info_alpha = "rgba(2,132,199,0.1)"
-    bg_info_light_alpha = "rgba(56,189,248,0.2)"
+    border_info_alpha = "rgba(14, 165, 233, 0.3)"
+    shadow_info_alpha = "rgba(14, 165, 233, 0.1)"
+    bg_info_light_alpha = "rgba(56, 189, 248, 0.2)"
     
-    grad_ai = "linear-gradient(135deg,#f3e8ff 0%,#e9d5ff 100%)"
-    border_ai_alpha = "rgba(139,92,246,0.3)"
-    shadow_ai_alpha = "rgba(139,92,246,0.1)"
+    grad_ai = "linear-gradient(135deg,#f0f9ff 0%,#e0f2fe 100%)"
+    border_ai_alpha = "rgba(14, 165, 233, 0.3)"
+    shadow_ai_alpha = "rgba(14, 165, 233, 0.1)"
     
-    bg_success_alpha = "rgba(16,185,129,0.1)"
-    border_success_alpha = "rgba(16,185,129,0.3)"
+    bg_success_alpha = "rgba(16, 185, 129, 0.1)"
+    border_success_alpha = "rgba(16, 185, 129, 0.3)"
     
     chart_actual = "rgba(150, 150, 150, 0.7)"
     chart_h_alpha = "rgba(16, 185, 129, 0.9)"
     chart_f_alpha = "rgba(20, 184, 166, 0.9)"
     chart_line_muted = "rgba(148, 163, 184, 0.5)"
     
-    chart_fill_alpha = "rgba(167,139,250,0.18)"
-    chart_fill_alpha2 = "rgba(167,139,250,0.1)"
+    chart_fill_alpha = "rgba(56, 189, 248, 0.18)"
+    chart_fill_alpha2 = "rgba(56, 189, 248, 0.1)"
     
     bg_transparent = "rgba(0,0,0,0)"  # 透明背景用
     
@@ -120,20 +123,20 @@ class ThemeColors:
     alert_danger_border = "#fecaca"
     alert_danger_text = "#991b1b"
     
-    alert_info_bg = "#e0e7ff"
-    alert_info_border = "#c7d2fe"
-    alert_info_text = "#3730a3"
+    alert_info_bg = "#f0f9ff"
+    alert_info_border = "#bae6fd"
+    alert_info_text = "#0369a1"
 
     # ─── UI 特殊効果 ───
-    tooltip_bg = "#1e293b"      # ツールチップ背景
+    tooltip_bg = "#0f172a"      # ツールチップ背景
     tooltip_text = "#ffffff"    # ツールチップ文字
     shadow_sm = "0 1px 3px rgba(0,0,0,0.05)"
     shadow_md = "0 4px 6px -1px rgba(0,0,0,0.05), 0 2px 4px -1px rgba(0,0,0,0.03)"
     shadow_lg = "0 10px 25px -5px rgba(0,0,0,0.1), 0 8px 10px -6px rgba(0,0,0,0.05)"
-    shadow_info = "0 4px 12px rgba(99, 102, 241, 0.1)"
+    shadow_info = "0 4px 12px rgba(14, 165, 233, 0.15)"
 
     # ─── 汎用パレット ───
-    palette = ["#6366f1", "#10b981", "#f59e0b", "#0284c7", "#8b5cf6", "#ec4899", "#ef4444"]
+    palette = ["#0ea5e9", "#10b981", "#f59e0b", "#0284c7", "#8b5cf6", "#ec4899", "#ef4444"]
 
     # ─── フォントサイズ ───
     size_xs = "0.75rem"    # 極小 (キャプション等)

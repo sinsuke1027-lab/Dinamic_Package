@@ -14,6 +14,9 @@ dashboard/app.py  ― フェーズ1 ホワイトボックス化（タブ型 SaaS
 
 import os
 import sqlite3
+import copy
+import random
+import math
 from datetime import date, datetime, timezone, timedelta
 
 import pandas as pd
@@ -1896,7 +1899,7 @@ elif selected_tab == "🔬 モデル性能評価と最適化選択":
     st.write("アルゴリズムの判定基準や、商品の分類しきい値、スコアリングの重み付けを微調整します。")
 
     with st.expander("⚙️ アルゴリズム・分類・スコアの詳細設定", expanded=False):
-        c1, c2, c3 = st.columns(3)
+        c1, c2 = st.columns(2)
         with c1:
             st.markdown("**📏 在庫・時期の判定しきい値**")
             inv_p = st.number_input("希少プレミアム在庫率", 0.0, 1.0, float(ai_config["inv_threshold_premium"]), 0.05)
@@ -1916,17 +1919,6 @@ elif selected_tab == "🔬 モデル性能評価と最適化選択":
             ai_config["class_niche_days"] = niche_d
             ai_config["class_niche_ratio"] = niche_r
 
-        with c3:
-            st.markdown("**🏆 評価スコアの重み付け (合計1.0)**")
-            w_mape = st.slider("MAPE (精度)", 0.0, 1.0, float(SCORE_WEIGHT_MAPE), 0.05)
-            w_lift = st.slider("Lift (収益)", 0.0, 1.0, float(SCORE_WEIGHT_LIFT), 0.05)
-            w_spoil = st.slider("Spoilage (廃棄)", 0.0, 1.0, float(SCORE_WEIGHT_SPOILAGE), 0.05)
-            ai_config["score_weight_mape"] = w_mape
-            ai_config["score_weight_lift"] = w_lift
-            ai_config["score_weight_spoilage"] = w_spoil
-            ai_config["score_weight_dir_acc"] = max(0.0, 1.0 - (w_mape + w_lift + w_spoil))
-            st.caption(f"Directional Accuracy 重み: {ai_config['score_weight_dir_acc']:.2f}")
-
     st.markdown("---")
     st.markdown("### 🧪 Section 2: 評価シナリオ設定")
     st.write("特定のカテゴリに対して、複数のアルゴリズムやパラメータを組み合わせた「シナリオ」を定義し、比較テストを行います。")
@@ -1938,44 +1930,53 @@ elif selected_tab == "🔬 モデル性能評価と最適化選択":
         st.warning("商品データが存在しません。")
         st.stop()
 
-    target_category = st.selectbox("🎯 バックテスト対象のカテゴリ", cat_options, help="このカテゴリに属する商品群に対して複数のシナリオをテストします。")
+    t_col1, t_col2 = st.columns([3, 2])
+    target_category = t_col1.selectbox("🎯 バックテスト対象のカテゴリ", cat_options, help="このカテゴリに属する商品群に対して複数のシナリオをテストします。")
     t_item, t_char = target_category.split("---")
 
     # 実績平均販売率を算出
     cat_products1 = edited_cls_df[(edited_cls_df["商品種別"] == t_item) & (edited_cls_df["特性 (クリックで変更)"] == t_char)]
-    target_inv_ids1 = bt_inv_df[bt_inv_df["name"].isin(cat_products1["商品名"]) & (bt_inv_df["item_type"] == t_item)]["id"].tolist()
-    avg_sell_through = 1.0
-    if target_inv_ids1:
-        total_inv1 = bt_inv_df[bt_inv_df["id"].isin(target_inv_ids1)]["total_stock"].sum()
-        total_booked1 = bt_events_df[bt_events_df["inventory_id"].isin(target_inv_ids1)]["quantity"].sum()
-        if total_inv1 > 0:
-            avg_sell_through = min(1.0, total_booked1 / total_inv1) # 最大100%
+    target_product_names = cat_products1["商品名"].tolist()
+    
+    # カテゴリに属する全商品の個別販売率を計算
+    individual_rates = []
+    category_inv_bt = bt_inv_df[(bt_inv_df["name"].isin(target_product_names)) & (bt_inv_df["item_type"] == t_item)]
+    
+    for _, row in category_inv_bt.iterrows():
+        inv_id_bt = row["id"]
+        total_stock_bt = row["total_stock"]
+        if total_stock_bt > 0:
+            booked_count_bt = bt_events_df[bt_events_df["inventory_id"] == inv_id_bt]["quantity"].sum()
+            individual_rates.append(min(1.0, booked_count_bt / total_stock_bt))
+            
+    avg_sell_through_val = sum(individual_rates) / len(individual_rates) if individual_rates else 1.0
+    
+    global_target_sr = t_col2.slider(
+        "最終目標販売率(%)", 1, 100, int(avg_sell_through_val * 100), 1,
+        help="全シナリオで共通の目標値です。デフォルトはカテゴリ内商品の平均実績値です。"
+    ) / 100.0
+    
+    # 共通設定に目標販売率を反映
+    ai_config["target_sell_rate"] = global_target_sr
 
     if "eval_scenarios" not in st.session_state:
-        c_r_std = ai_config.copy()
-        c_r_agg = ai_config.copy()
-        c_r_agg["peak_markup"] = 1.30
-        c_r_agg["last_minute_discount"] = 0.60
-        c_d_std = ai_config.copy()
-        c_d_std["decay_pattern"] = "standard"
-        c_d_std["decay_k"] = 15.0
-        c_d_std["decay_p"] = 0.15
-        c_d_early = ai_config.copy()
-        c_d_early["decay_pattern"] = "early_rush"
-        c_d_early["decay_k"] = 10.0
-        c_d_early["decay_p"] = 0.20
-        c_d_late = ai_config.copy()
-        c_d_late["decay_pattern"] = "last_minute_rush"
-        c_d_late["decay_k"] = 25.0
-        c_d_late["decay_p"] = 0.10
-
+        # 深いコピーを使用して各シナリオの設定を完全に独立させる
         st.session_state["eval_scenarios"] = [
-            {"id": "A", "name": "安定・ルールベース", "strategy": "rule_based", "config": c_r_std},
-            {"id": "B", "name": "強気・ルールベース", "strategy": "rule_based", "config": c_r_agg},
-            {"id": "C", "name": "標準・需要予測", "strategy": "demand_forecast", "config": c_d_std},
-            {"id": "D", "name": "早割特化・需要予測", "strategy": "demand_forecast", "config": c_d_early},
-            {"id": "E", "name": "直前特化・需要予測", "strategy": "demand_forecast", "config": c_d_late}
+            {"id": "A", "name": "安定・ルールベース", "strategy": "rule_based", "config": copy.deepcopy(ai_config)},
+            {"id": "B", "name": "強気・ルールベース", "strategy": "rule_based", "config": copy.deepcopy(ai_config)},
+            {"id": "C", "name": "標準・需要予測", "strategy": "demand_forecast", "config": copy.deepcopy(ai_config)},
+            {"id": "D", "name": "早割特化・需要予測", "strategy": "demand_forecast", "config": copy.deepcopy(ai_config)},
+            {"id": "E", "name": "直前特化・需要予測", "strategy": "demand_forecast", "config": copy.deepcopy(ai_config)}
         ]
+        
+        # 個別調整
+        st.session_state["eval_scenarios"][1]["config"]["peak_markup"] = 1.30
+        st.session_state["eval_scenarios"][1]["config"]["last_minute_discount"] = 0.60
+        st.session_state["eval_scenarios"][2]["config"]["decay_pattern"] = "standard"
+        st.session_state["eval_scenarios"][3]["config"]["decay_pattern"] = "early_rush"
+        st.session_state["eval_scenarios"][3]["config"]["decay_k"] = 10.0
+        st.session_state["eval_scenarios"][4]["config"]["decay_pattern"] = "last_minute_rush"
+        st.session_state["eval_scenarios"][4]["config"]["decay_k"] = 25.0
 
     def add_scenario():
         new_id = chr(65 + len(st.session_state["eval_scenarios"]))
@@ -1996,7 +1997,7 @@ elif selected_tab == "🔬 モデル性能評価と最適化選択":
     # シナリオ入力UI
     for i, sc in enumerate(scenarios):
         with st.expander(f"シナリオ {sc['id']}: {sc['name']} ({'ルールベース' if sc['strategy']=='rule_based' else '需要予測'})", expanded=(i==0)):
-            c1, c2, c3 = st.columns([2, 1, 1])
+            c1, c2 = st.columns([2, 1])
             sc["name"] = c1.text_input("シナリオ名", value=sc["name"], key=f"sc_name_{i}")
             sc["strategy"] = c2.selectbox("アルゴリズム", ["rule_based", "demand_forecast"], 
                                           index=0 if sc["strategy"]=="rule_based" else 1,
@@ -2004,9 +2005,7 @@ elif selected_tab == "🔬 モデル性能評価と最適化選択":
                                           key=f"sc_strat_{i}")
             
             cfg = sc["config"]
-            trg_sr = c3.slider("最終目標販売率(%)", 1, 100, int(cfg.get("target_sell_rate", avg_sell_through)*100), 1, 
-                               help="デフォルト値は過去実績の平均です。ニッチ商品など100%売り切らない想定の場合は下げてください。", key=f"trg_sr_{i}")
-            cfg["target_sell_rate"] = trg_sr / 100.0
+            cfg["target_sell_rate"] = global_target_sr
 
             pc1, pc2, pc3, pc4 = st.columns(4)
             if sc["strategy"] == "rule_based":
@@ -2019,14 +2018,25 @@ elif selected_tab == "🔬 モデル性能評価と最適化選択":
                 cfg["abundant_discount"] = 1.0 - ad/100
                 cfg["last_minute_discount"] = 1.0 - lm/100
             else:
-                ptn = pc1.selectbox("減衰パターン", ["standard", "early_rush", "last_minute_rush"],
-                                   index=["standard", "early_rush", "last_minute_rush"].index(cfg.get("decay_pattern", "standard")),
+                ptn_opts = ["standard", "early_rush", "last_minute_rush", "linear", "concave", "convex", "sigmoid", "bimodal"]
+                ptn = pc1.selectbox("減衰パターン", ptn_opts,
+                                   index=ptn_opts.index(cfg.get("decay_pattern", "standard")),
                                    key=f"ptn_{i}")
-                dek = pc2.slider("鋭さ (k)", 5.0, 50.0, float(cfg.get("decay_k", 15.0)), 1.0, key=f"dek_{i}")
-                dep = pc3.slider("柔軟性 (p)", 0.05, 0.50, float(cfg.get("decay_p", 0.15)), 0.05, key=f"dep_{i}")
+                dek = pc2.slider("鋭さ (k)", 5.0, 80.0, float(cfg.get("decay_k", 20.0)), 1.0, key=f"dek_{i}", 
+                                help="linear/concave/convex/bimodal時は無視されます", disabled=(ptn in ["linear", "concave", "convex", "bimodal"]))
+                dep = pc3.slider("柔軟性 (p)", 0.01, 0.99, float(cfg.get("decay_p", 0.12)), 0.01, key=f"dep_{i}",
+                                help="linear/concave/convex/bimodal時は無視されます", disabled=(ptn in ["linear", "concave", "convex", "bimodal"]))
+                dm = pc4.slider("需要倍率", 0.1, 8.0, float(cfg.get("demand_multiplier", 1.0)), 0.1, key=f"dm_{i}",
+                                help="ベースの売れ行きボリュームを何倍にするか調整します")
                 cfg["decay_pattern"] = ptn
                 cfg["decay_k"] = dek
                 cfg["decay_p"] = dep
+                cfg["demand_multiplier"] = dm
+
+            # 共通: 価格弾力性 (Elasticity) の個別調整
+            st.markdown("<small>※弾力性はマスタ値を上書きします</small>", unsafe_allow_html=True)
+            el_val = st.slider("価格弾力性 (Elasticity)", 0.1, 3.0, float(abs(cfg.get("elasticity", 1.5))), 0.1, key=f"el_{i}")
+            cfg["elasticity"] = el_val
 
     st.markdown("---")
 
@@ -2036,173 +2046,464 @@ elif selected_tab == "🔬 モデル性能評価と最適化選択":
     st.markdown("### 📊 Section 2: バックテスト実行と推移グラフ")
     st.write(f"**対象カテゴリ:** `{target_category}` に対して、全シナリオのシミュレーションを実行します。")
 
-    if st.button("▶ 全シナリオのバックテストを実行", type="primary", use_container_width=True):
+    def run_backtest_scenarios(target_scenarios, target_ids, bt_inv_df, bt_events_df):
+        from model_evaluator import backtest_strategy
+        import numpy as np
+        import copy
+        
+        results = []
+        for s_idx, sc in enumerate(target_scenarios):
+            evals = []
+            sum_pred_rates = None
+            sum_act_rates = None
+            all_lead_days = None
+            cnt = 0
+            
+            for inv_id in target_ids:
+                row_q = bt_inv_df[bt_inv_df["id"] == inv_id]
+                if row_q.empty: continue
+                row = row_q.iloc[0]
+                ev = bt_events_df[bt_events_df["inventory_id"] == inv_id]
+                res = backtest_strategy(sc["strategy"], row, ev, sc["config"])
+                evals.append(res)
+                
+                p_r = np.array(res.get("predicted_rates", []))
+                a_r = np.array(res.get("actual_rates", []))
+                l_d = np.array(res.get("lead_days", []))
+                
+                if len(l_d) > 0:
+                    if sum_pred_rates is None:
+                        sum_pred_rates = p_r.copy()
+                        sum_act_rates = a_r.copy()
+                        all_lead_days = l_d.copy()
+                    else:
+                        m_len = min(len(sum_pred_rates), len(p_r))
+                        sum_pred_rates[:m_len] += p_r[:m_len]
+                        sum_act_rates[:m_len] += a_r[:m_len]
+                    cnt += 1
+            
+            # スコア平均と安定性(Robustness)の計算
+            df_e = pd.DataFrame(evals)
+            if not df_e.empty:
+                avg_mape = df_e["mape"].mean()
+                avg_dtw = df_e["dtw_distance"].mean()
+                avg_lift = df_e["revenue_lift"].mean()
+                avg_comp_raw = df_e["composite_score"].mean()
+                # 安定性ペナルティ: スコアのばらつきが大きいほどマイナス
+                std_comp = df_e["composite_score"].std() if len(df_e) > 1 else 0
+                avg_comp = avg_comp_raw - (std_comp * 0.5) 
+                
+                avg_mae = df_e["mae"].mean()
+                avg_rmse = df_e["rmse"].mean()
+                avg_bias = df_e["bias"].mean()
+                avg_spoil = df_e["spoilage_reduction"].mean()
+            else:
+                avg_mape, avg_dtw, avg_comp, avg_mae, avg_rmse, avg_bias, avg_lift, avg_spoil = 999.0, 1.0, 0, 0, 0, 0, 0, 0
+
+            results.append({
+                "id": sc["id"],
+                "name": sc["name"],
+                "mape": avg_mape,
+                "dtw": avg_dtw,
+                "strategy": sc["strategy"],
+                "config": copy.deepcopy(sc["config"]),
+                "mae": avg_mae, "rmse": avg_rmse, "bias": avg_bias,
+                "lift": avg_lift, "spoilage": avg_spoil, "score": avg_comp,
+                "avg_pred": (sum_pred_rates / cnt) if cnt > 0 else None,
+                "avg_act": (sum_act_rates / cnt) if cnt > 0 else None,
+                "lead_days": all_lead_days
+            })
+        return results
+
+    st.markdown("---")
+    
+    # === スコア重み付け（優先度）設定 UI ===
+    with st.expander("⚙️ 評価スコアの優先度・重み付け設定", expanded=False):
+        st.markdown("<small>※自動最適化やスコア算出時に、どの指標を重視するかを設定します。（合計100になるように自動計算されます）</small>", unsafe_allow_html=True)
+        w_col1, w_col2, w_col3 = st.columns(3)
+        w_col4, w_col5, _ = st.columns(3)
+        
+        # デフォルトは「波形再現を最優先」する設定
+        raw_w_mape = w_col1.slider("MAPE (全体の誤差の少なさ)", 0, 100, 40, 5, help="予測が実績からどれくらいブレないか")
+        raw_w_dtw  = w_col2.slider("DTW (波形の似ている度合い)", 0, 100, 30, 5, help="グラフの形がどれくらい似ているか")
+        raw_w_lift = w_col3.slider("Revenue Lift (収益改善)", 0, 100, 15, 5, help="ベースシナリオからの収益増加率")
+        raw_w_spoil = w_col4.slider("Spoilage (廃棄量削減)", 0, 100, 10, 5, help="ベースシナリオからの廃棄ロス削減率")
+        raw_w_dir  = w_col5.slider("Directional Acc (方向の一致)", 0, 100, 5, 5, help="実績が伸びた日に予測も伸びているか")
+        
+        total_raw_w = raw_w_mape + raw_w_dtw + raw_w_lift + raw_w_spoil + raw_w_dir
+        if total_raw_w == 0: total_raw_w = 1 # ゼロ除算回避
+        
+        score_weights = {
+            "score_weight_mape": raw_w_mape / total_raw_w,
+            "score_weight_dtw": raw_w_dtw / total_raw_w,
+            "score_weight_lift": raw_w_lift / total_raw_w,
+            "score_weight_spoilage": raw_w_spoil / total_raw_w,
+            "score_weight_dir_acc": raw_w_dir / total_raw_w
+        }
+        
+    st.markdown("---")
+    
+    b_col1, b_col2 = st.columns(2)
+    if b_col1.button("▶ 全シナリオのバックテストを実行", type="primary", use_container_width=True):
         with st.spinner("各シナリオのシミュレーション中..."):
-
-            # 対象カテゴリの商品だけ抽出
             cat_products = edited_cls_df[(edited_cls_df["商品種別"] == t_item) & (edited_cls_df["特性 (クリックで変更)"] == t_char)]
-            target_inv_ids = bt_inv_df[bt_inv_df["name"].isin(cat_products["商品名"]) & (bt_inv_df["item_type"] == t_item)]["id"].tolist()
-
-            if not target_inv_ids:
+            target_ids = bt_inv_df[bt_inv_df["name"].isin(cat_products["商品名"]) & (bt_inv_df["item_type"] == t_item)]["id"].tolist()
+            
+            if not target_ids:
                 st.warning("このカテゴリに属する商品実績がありません。")
             else:
-                # 分析結果を格納
-                scenario_results = []
-                from model_evaluator import backtest_strategy, _empty_eval
+                # 重み付け設定を全シナリオに適用
+                for sc in scenarios:
+                    sc["config"].update(score_weights)
+                st.session_state["backtest_results"] = run_backtest_scenarios(scenarios, target_ids, bt_inv_df, bt_events_df)
+                st.success("全てのシナリオのシミュレーションが完了しました。")
 
-                # シナリオごとのグラフ用データ
-                fig = go.Figure()
-                colors = Theme.palette
-
-                # 実績線の加算用
-                all_actual_rates = None
-                all_lead_days = None
-
-                for s_idx, sc in enumerate(scenarios):
-                    evals = []
-                    sum_pred_rates = None
-                    sum_act_rates = None
-                    cnt = 0
-
-                    for inv_id in target_inv_ids:
-                        target_row_q = bt_inv_df[bt_inv_df["id"] == inv_id]
-                        if target_row_q.empty: continue
-                        target_row = target_row_q.iloc[0]
-                        ev_df = bt_events_df[bt_events_df["inventory_id"] == inv_id]
-                        e_res = backtest_strategy(sc["strategy"], target_row, ev_df, sc["config"])
-                        evals.append(e_res)
-
-                        # 配列を合算して平均を出す
-                        import numpy as np
-                        p_rates = np.array(e_res.get("predicted_rates", []))
-                        a_rates = np.array(e_res.get("actual_rates", []))
-                        l_days = np.array(e_res.get("lead_days", []))
-
-                        if len(l_days) > 0:
-                            if sum_pred_rates is None:
-                                sum_pred_rates = p_rates.copy()
-                                sum_act_rates = a_rates.copy()
-                                all_lead_days = l_days.copy()
-                            else:
-                                min_len = min(len(sum_pred_rates), len(p_rates))
-                                sum_pred_rates[:min_len] += p_rates[:min_len]
-                                sum_act_rates[:min_len] += a_rates[:min_len]
-                            cnt += 1
-
-                    if cnt > 0:
-                        avg_pred = sum_pred_rates / cnt
-                        avg_act = sum_act_rates / cnt
-                        all_actual_rates = avg_act # 実績は全てのシナリオで同じはず
-
-                        c = colors[s_idx % len(colors)]
-                        fig.add_trace(go.Scatter(
-                            x=-all_lead_days, y=avg_pred * 100, mode='lines',
-                            name=f"[{sc['id']}] {sc['name']}",
-                            line=dict(color=c, width=3, dash='dash')
-                        ))
-
-                    # スコア平均
-                    df_e = pd.DataFrame(evals)
-                    avg_mape = df_e["mape"].mean() if not df_e.empty else 0
-                    avg_mae = df_e["mae"].mean() if not df_e.empty else 0
-                    avg_rmse = df_e["rmse"].mean() if not df_e.empty else 0
-                    avg_bias = df_e["bias"].mean() if not df_e.empty else 0
-                    avg_lift = df_e["revenue_lift"].mean() if not df_e.empty else 0
-                    avg_spoil = df_e["spoilage_reduction"].mean() if not df_e.empty else 0
-                    avg_comp = df_e["composite_score"].mean() if not df_e.empty else 0
-
-                    # 辞書のコピーを渡す（Streamlitのバグ回避）
-                    import copy
-                    scenario_results.append({
-                        "シナリオ": f"[{sc['id']}] {sc['name']}",
-                        "アルゴリズム": "🌟ルールベース" if sc['strategy']=='rule_based' else "📈需要予測",
-                        "MAPE": avg_mape,
-                        "MAE": avg_mae,
-                        "RMSE": avg_rmse,
-                        "Bias": avg_bias,
-                        "Revenue Lift": avg_lift,
-                        "廃棄損低減率": avg_spoil,
-                        "Composite Score": avg_comp,
-                        "Ref_strategy": sc["strategy"],
-                        "Ref_config": copy.deepcopy(sc["config"])
-                    })
-
-                # 実績線を追加
-                if all_actual_rates is not None and all_lead_days is not None:
-                    fig.add_trace(go.Scatter(
-                        x=-all_lead_days, y=all_actual_rates * 100, mode='lines',
-                        name='実際の販売ペース', line=dict(color=Theme.chart_actual, width=4)
-                    ))
-
-                # グラフ描画
-                st.write("")
-                fig.update_layout(
-                    title=f"`{target_category}` カテゴリの仮想販売推移シミュレーション",
-                    xaxis_title="リードタイム (日前)",
-                    yaxis_title="累計販売率 (%)",
-                    yaxis=dict(range=[0, 100]),
-                    template="plotly_white",
-                    legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
-                )
-                st.plotly_chart(fig, use_container_width=True)
-
-                st.markdown("---")
-                # === Section 3-4: 比較表と登録 ===
-                st.markdown("### 🏆 Section 3: シナリオ評価スコア・マトリクス")
+    if b_col2.button("🚀 パラメータの自動最適化 (Auto-tune)", type="secondary", use_container_width=True, help="各シナリオの設定をHill Climbing法で自動調整し、最も実績に近い設定を探します。"):
+        cat_products = edited_cls_df[(edited_cls_df["商品種別"] == t_item) & (edited_cls_df["特性 (クリックで変更)"] == t_char)]
+        target_ids = bt_inv_df[bt_inv_df["name"].isin(cat_products["商品名"]) & (bt_inv_df["item_type"] == t_item)]["id"].tolist()
+        
+        if not target_ids:
+            st.warning("このカテゴリに属する商品実績がありません。")
+        else:
+            p_bar = st.progress(0)
+            status_text = st.empty()
+            
+            # ログ表示用コンテナ
+            debug_expander = st.expander("🛠️ 最適化プロセス・ログ (デバッグ用)", expanded=True)
+            log_container = debug_expander.container()
+            
+            all_trials = []
+            
+            # --- Round 0: 広域スクリーニング (砂まきフェーズ v3) ---
+            num_sand_sowing = 150
+            log_container.write(f"**[Round 0] 広域スクリーニング開始 ({num_sand_sowing}パターン)**")
+            
+            base_patterns = ["standard", "linear", "concave", "convex", "sigmoid", "early_rush", "last_minute_rush", "bimodal"]
+            candidates = []
+            
+            # 定番パターンの全網羅
+            for bp in base_patterns:
+                for strat in ["rule_based", "demand_forecast"]:
+                    cand = {"name": f"Base_{strat}_{bp}", "strategy": strat, "config": copy.deepcopy(ai_config)}
+                    cand["config"]["decay_pattern"] = bp
+                    cand["config"].update(score_weights) # 重みを適用
+                    candidates.append(cand)
+            
+            # 残りを広域ランダムで埋める
+            for i in range(num_sand_sowing - len(candidates)):
+                strategy = random.choice(["rule_based", "demand_forecast"])
+                config = copy.deepcopy(ai_config)
+                config["decay_pattern"] = random.choice(base_patterns)
+                config["decay_k"] = random.uniform(5.0, 80.0)
+                config["decay_p"] = random.uniform(0.01, 0.99)
+                config["demand_multiplier"] = random.uniform(0.1, 8.0)
+                config["elasticity"] = random.uniform(0.1, 4.0)
+                config.update(score_weights) # 重みを適用
                 
-                with st.expander("ℹ️ 各評価指標の解説（クリックで開く）"):
-                    st.markdown("""
-                    - **MAPE (平均絶対パーセント誤差)**: 実績に対する予測誤差の割合の平均。低いほど誤差が少なく優秀。0に近づくほど理想的です。
-                    - **MAE (平均絶対誤差)**: 予測が実績から平均して全体で「何%」ずれているかを絶対値で表したもの。単位も含めて直感的に把握しやすい指標です。
-                    - **RMSE (二乗平均平方根誤差)**: 大きな誤差に対してペナルティを重くした指標。この値が大きい場合、たまに極端に外れる予測をしている可能性があります。
-                    - **Bias (偏り)**: 誤差の単純な平均。プラスなら「予測が実績より過大（強気すぎる）」、マイナスなら「予測が実績より過小（弱気すぎる）」傾向を示します。
-                    - **Revenue Lift (収益リフト)**: 基準価格で販売し続けた場合と比較した収益の増加率(%)。高いほど収益性が向上します。
-                    - **廃棄損低減率**: 基準設定と比較して、売れ残りによる機会損失をどれだけ減らせたか(%)。
-                    - **Composite Score (総合スコア)**: これらの指標を総合勘案して算出した100点満点の独自スコア。シナリオの最終判定に使用されます。
-                    """)
+                if strategy == "rule_based":
+                    config["peak_markup"] = random.uniform(1.0, 2.0)
+                    config["last_minute_discount"] = random.uniform(0.2, 1.0)
+                    config["rare_premium"] = random.uniform(1.0, 3.0)
+                    config["abundant_discount"] = random.uniform(0.3, 1.0)
+                
+                candidates.append({"name": f"Rand_{i}", "strategy": strategy, "config": config})
+            
+            for i, cand in enumerate(candidates):
+                status_text.text(f"スクリーニング中: {cand['name']} ({i+1}/{num_sand_sowing})")
+                cand["id"] = "Temp"
+                cand["config"]["target_sell_rate"] = global_target_sr
+                res = run_backtest_scenarios([cand], target_ids, bt_inv_df, bt_events_df)[0]
+                all_trials.append(res)
+            
+            # 初期選定 (スコア順)
+            all_trials.sort(key=lambda x: x["score"], reverse=True)
+            seeds = all_trials[:2]
+            
+            best_score_mape = seeds[0]["mape"]
+            log_container.write(f"Round 0 完了. Best Score: {seeds[0]['score']:.1f} (MAPE: {best_score_mape:.2f}%)")
+
+            def mutate_config_v3(cfg, strategy, intensity=1.0):
+                new_cfg = copy.deepcopy(cfg)
+                # マルチポイント変異 (同時に1〜3個のパラメータを動かす)
+                num_mutations = random.randint(1, 3)
+                for _ in range(num_mutations):
+                    r = random.random()
+                    if strategy == "rule_based":
+                        if r < 0.25:
+                            new_cfg["peak_markup"] = max(1.0, min(2.5, new_cfg.get("peak_markup", 1.15) + random.uniform(-0.25, 0.25) * intensity))
+                        elif r < 0.50:
+                            new_cfg["last_minute_discount"] = max(0.2, min(1.0, new_cfg.get("last_minute_discount", 0.8) + random.uniform(-0.2, 0.2) * intensity))
+                        elif r < 0.75:
+                            new_cfg["rare_premium"] = max(1.0, min(3.5, new_cfg.get("rare_premium", 1.4) + random.uniform(-0.4, 0.4) * intensity))
+                        else:
+                            new_cfg["abundant_discount"] = max(0.3, min(1.0, new_cfg.get("abundant_discount", 0.9) + random.uniform(-0.2, 0.2) * intensity))
+                    else:
+                        if r < 0.10: 
+                            new_cfg["decay_pattern"] = random.choice(base_patterns)
+                        elif r < 0.40: 
+                            new_cfg["decay_k"] = max(5.0, min(150.0, new_cfg.get("decay_k", 20.0) + random.uniform(-30, 30) * intensity))
+                        elif r < 0.70: 
+                            new_cfg["decay_p"] = max(0.01, min(0.99, new_cfg.get("decay_p", 0.12) + random.uniform(-0.3, 0.3) * intensity))
+                        else: 
+                            new_cfg["demand_multiplier"] = max(0.01, min(15.0, new_cfg.get("demand_multiplier", 1.0) + random.uniform(-1.5, 1.5) * intensity))
                     
-                res_df = pd.DataFrame(scenario_results)
+                    if random.random() < 0.3:
+                        new_cfg["elasticity"] = max(0.05, min(5.0, new_cfg.get("elasticity", 1.5) + random.uniform(-0.5, 0.5) * intensity))
+                
+                new_cfg["target_sell_rate"] = global_target_sr
+                return new_cfg
 
-                # スコア降順にソート
-                res_df = res_df.sort_values("Composite Score", ascending=False).reset_index(drop=True)
+            def crossover_configs(p1, p2):
+                # 遺伝子交叉: 二つの親からランダムにキーを引き継ぐ
+                child_cfg = copy.deepcopy(p1["config"])
+                p2_cfg = p2["config"]
+                for key in ["decay_pattern", "decay_k", "decay_p", "demand_multiplier", "elasticity", "peak_markup", "last_minute_discount", "rare_premium", "abundant_discount"]:
+                    if key in p2_cfg and random.random() < 0.5:
+                        child_cfg[key] = p2_cfg[key]
+                return child_cfg
 
-                # 表示用DF
-                disp_df = res_df.copy()
-                disp_df["MAPE"] = disp_df["MAPE"].map(lambda x: f"{x:.1f}%")
-                disp_df["MAE"] = disp_df["MAE"].map(lambda x: f"{x:.1f}%")
-                disp_df["RMSE"] = disp_df["RMSE"].map(lambda x: f"{x:.1f}%")
-                disp_df["Bias"] = disp_df["Bias"].map(lambda x: f"{x:+.1f}%")
-                disp_df["Revenue Lift"] = disp_df["Revenue Lift"].map(lambda x: f"{x:+.1f}%")
-                disp_df["廃棄損低減率"] = disp_df["廃棄損低減率"].map(lambda x: f"{x:+.1f}%")
-                disp_df["Composite Score"] = disp_df["Composite Score"].map(lambda x: f"{x:.1f}点")
+            # --- Round 1-10: 反復最適化 / Genetic Evolution ---
+            max_rounds = 10
+            for round_idx in range(1, max_rounds + 1):
+                round_population = []
+                status_text.text(f"最適化ラウンド {round_idx}/{max_rounds} (進化中)...")
+                p_bar.progress(round_idx / max_rounds)
+                
+                # 1. 交叉個体の生成
+                if len(seeds) >= 2:
+                    for c_idx in range(6):
+                        crossed = {
+                            "id": "Temp", "name": f"Cross{round_idx}_{c_idx}",
+                            "strategy": random.choice([seeds[0]["strategy"], seeds[1]["strategy"]]),
+                            "config": crossover_configs(seeds[0], seeds[1])
+                        }
+                        round_population.append(crossed)
+                
+                # 2. 変異個体の生成
+                for s_idx, seed in enumerate(seeds):
+                    for m_idx in range(12):
+                        mutated = {
+                            "id": "Temp", "name": f"Mut{round_idx}_{s_idx}_{m_idx}", 
+                            "strategy": seed["strategy"], 
+                            "config": mutate_config_v3(seed["config"], seed["strategy"], intensity=(1.2 - round_idx/10.0))
+                        }
+                        round_population.append(mutated)
+                
+                # 一括実行
+                results = run_backtest_scenarios(round_population, target_ids, bt_inv_df, bt_events_df)
+                all_trials.extend(results)
+                
+                # 選定: 多様性を維持しつつ上位2つを次世代の親に
+                all_trials.sort(key=lambda x: x["score"], reverse=True)
+                
+                new_seeds = [all_trials[0]]
+                # 2つ目の親は、違うアルゴリズムか、違うパターンを優先
+                for t in all_trials[1:100]:
+                    is_diff = (t["strategy"] != new_seeds[0]["strategy"]) or \
+                              (t["config"].get("decay_pattern") != new_seeds[0]["config"].get("decay_pattern"))
+                    if is_diff:
+                        new_seeds.append(t)
+                        break
+                if len(new_seeds) < 2:
+                    new_seeds.append(all_trials[1])
+                seeds = new_seeds
+                
+                best_t = max(all_trials, key=lambda x: x["score"])
+                log_container.write(f"Round {round_idx}: Best Score={best_t['score']:.1f} (MAPE: {best_t['mape']:.2f}%) (Genetics Action: Crossover & Multi-Mutation)")
+                
+                # 成功条件 (総合スコアの改善が飽和したら終了)
+                if round_idx > 3 and abs(all_trials[0]["score"] - all_trials[10]["score"]) < 0.5:
+                    log_container.write(f"✅ 進化が収束したため、早期終了します。")
+                    break
 
-                # スコア1位に王冠をつける
-                if len(disp_df) > 0:
-                    disp_df.loc[0, "シナリオ"] = "👑 " + disp_df.loc[0, "シナリオ"]
+            # 最終選出 (多様性フィルタを適用)
+            all_trials.sort(key=lambda x: x["score"], reverse=True)
+            diverse_final = []
+            for t in all_trials:
+                is_duplicate = False
+                for df in diverse_final:
+                    # 指標がほぼ同じものは同一とみなす
+                    if abs(t["mape"] - df["mape"]) < 0.1 and abs(t["score"] - df["score"]) < 0.1:
+                        is_duplicate = True
+                        break
+                if not is_duplicate:
+                    diverse_final.append(t)
+                if len(diverse_final) >= 5:
+                    break
+            
+            final_5 = diverse_final
 
-                st.dataframe(light_dataframe(disp_df.drop(columns=["Ref_strategy", "Ref_config"])), use_container_width=True, hide_index=True)
+            # --- Round 11: 最終微調整 (Fine-Tuning) ---
+            log_container.write(f"**[Round 11] 最終微調整 (Fine-Tuning) 開始**")
+            status_text.text("最終微調整フェーズを実行中...")
+            
+            def mutate_config_micro(cfg, strategy):
+                """微小な局所探索: パターンの変更はせず、数%のブレンドのみ行う"""
+                new_cfg = copy.deepcopy(cfg)
+                if strategy == "rule_based":
+                    if "peak_markup" in new_cfg: new_cfg["peak_markup"] *= random.uniform(0.98, 1.02)
+                    if "last_minute_discount" in new_cfg: new_cfg["last_minute_discount"] *= random.uniform(0.98, 1.02)
+                    if "rare_premium" in new_cfg: new_cfg["rare_premium"] *= random.uniform(0.98, 1.02)
+                    if "abundant_discount" in new_cfg: new_cfg["abundant_discount"] *= random.uniform(0.98, 1.02)
+                else:
+                    if "decay_k" in new_cfg: new_cfg["decay_k"] *= random.uniform(0.95, 1.05)
+                    if "decay_p" in new_cfg: new_cfg["decay_p"] = max(0.01, min(0.99, new_cfg["decay_p"] + random.uniform(-0.02, 0.02)))
+                    if "demand_multiplier" in new_cfg: new_cfg["demand_multiplier"] *= random.uniform(0.95, 1.05)
+                
+                if "elasticity" in new_cfg: new_cfg["elasticity"] *= random.uniform(0.98, 1.02)
+                
+                new_cfg["target_sell_rate"] = global_target_sr
+                return new_cfg
 
-                st.markdown("### 💾 Section 4: 最適シナリオの登録")
-                st.write(f"決定したシナリオを `{target_category}` に登録（永続化）します。登録されたモデル設定は全体（本日のアクション等）に波及します。")
+            finetuned_final = []
+            for s_idx, base_cand in enumerate(final_5):
+                # 局所探索用の微小変異体を生成 (10件)
+                micro_population = [base_cand] # オリジナルも比較対象に含める
+                for m_idx in range(10):
+                    micro_mutant = {
+                        "id": "Temp", "name": f"Micro_{s_idx}_{m_idx}",
+                        "strategy": base_cand["strategy"],
+                        "config": mutate_config_micro(base_cand["config"], base_cand["strategy"])
+                    }
+                    micro_population.append(micro_mutant)
+                
+                # 局所バックテスト
+                res_micro = run_backtest_scenarios(micro_population, target_ids, bt_inv_df, bt_events_df)
+                
+                # 最も成績の良いものをこのスロットの最終版とする (Hill Climbing)
+                best_micro = max(res_micro, key=lambda x: x["score"])
+                if best_micro["score"] > base_cand["score"]:
+                    log_container.write(f"Fine-Tuning: シナリオ枠 {s_idx+1} で改善を確認 (Score {base_cand['score']:.1f} -> {best_micro['score']:.1f})")
+                finetuned_final.append(best_micro)
 
-                s_col1, s_col2 = st.columns([3, 1])
-                selected_sc_name = s_col1.selectbox("📝 登録するシナリオを選択", res_df["シナリオ"].tolist(), index=0)
+            final_5 = finetuned_final
+            
+            for i, f in enumerate(final_5):
+                f["id"] = chr(65 + i)
+            
+            st.session_state["eval_scenarios"] = [
+                {"id": f["id"], "name": f["name"], "strategy": f["strategy"], "config": f["config"]}
+                for f in final_5
+            ]
+            st.session_state["backtest_results"] = final_5
+            p_bar.progress(100)
+            status_text.text("最適化完了！")
+            st.success("遺伝的アルゴリズム v3 により、実績データの波を捉えた最も堅牢な5プランを選出しました。")
 
-                st.write("")
-                if s_col2.button("💾 このシナリオを登録", type="primary", use_container_width=True):
-                    sc_data = res_df[res_df["シナリオ"] == selected_sc_name].iloc[0]
-                    
-                    save_model_setting(
-                        item_type=t_item, 
-                        characteristic=t_char, 
-                        strategy=sc_data["Ref_strategy"], 
-                        config=sc_data["Ref_config"], 
-                        score=sc_data["Composite Score"], 
-                        mape=sc_data["MAPE"], 
-                        lift=sc_data["Revenue Lift"], 
-                        spoilage=sc_data["廃棄損低減率"]
-                    )
-                    st.success(f"{target_category} に {selected_sc_name} の設定を登録しました！")
+    if "backtest_results" in st.session_state:
+        bt_res = st.session_state["backtest_results"]
+        
+        # グラフ描画
+        fig = go.Figure()
+        colors = Theme.palette
+        styles = ['solid', 'dash', 'dot', 'dashdot', 'longdash']
+        actual_line_drawn = False
+
+        for i, r in enumerate(bt_res):
+            c = colors[i % len(colors)]
+            dash_style = styles[i % len(styles)]
+            if r["avg_pred"] is not None and r["lead_days"] is not None:
+                # シナリオAのみ太実線、他は破線スタイルで区別
+                width = 4 if i == 0 else 3
+                fig.add_trace(go.Scatter(
+                    x=-r["lead_days"], y=r["avg_pred"] * 100, mode='lines',
+                    name=f"[{r['id']}] {r['name']}",
+                    line=dict(color=c, width=width, dash=dash_style)
+                ))
+                
+                if not actual_line_drawn and r["avg_act"] is not None:
+                    fig.add_trace(go.Scatter(
+                        x=-r["lead_days"], y=r["avg_act"] * 100, mode='lines',
+                        name='実際の販売ペース', line=dict(color=Theme.chart_actual, width=5)
+                    ))
+                    actual_line_drawn = True
+
+        st.write("")
+        fig.update_layout(
+            title=f"`{target_category}` カテゴリの仮想販売推移シミュレーション",
+            xaxis_title="リードタイム (日前)",
+            yaxis_title="累計販売率 (%)",
+            yaxis=dict(range=[0, 100]),
+            template="plotly_white",
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+        )
+        st.plotly_chart(fig, use_container_width=True)
+
+        st.markdown("---")
+        # === Section 3-4: 比較表と登録 ===
+        st.markdown("### 🏆 Section 3: シナリオ評価スコア・マトリクス")
+        
+        with st.expander("ℹ️ 各評価指標の解説（クリックで開く）"):
+            st.markdown("""
+            - **MAPE (平均絶対パーセント誤差)**: 実績に対する予測誤差の割合の平均。低いほど誤差が少なく優秀。0に近づくほど理想的です。
+            - **MAE (平均絶対誤差)**: 予測が実績から平均して全体で「何%」ずれているかを絶対値で表したもの。単位も含めて直感的に把握しやすい指標です。
+            - **RMSE (二乗平均平方根誤差)**: 大きな誤差に対してペナルティを重くした指標。この値が大きい場合、たまに極端に外れる予測をしている可能性があります。
+            - **DTW (Dynamic Time Warping)**: 形状の「似ている度合い」を測る距離指標。値が小さいほど実績の波形に近いことを示します。
+            - **Bias (偏り)**: 誤差の単純な平均。プラスなら「予測が実績より過大（強気すぎる）」、マイナスなら「予測が実績より過小（弱気すぎる）」傾向を示します。
+            - **Revenue Lift (収益リフト)**: 基準価格で販売し続けた場合と比較した収益の増加率(%)。高いほど収益性が向上します。
+            - **Composite Score (総合スコア)**: これらの指標を総合勘案して算出した100点満点の独自スコア。シナリオの最終判定に使用されます。
+            """)
+            
+        scenario_table_data = []
+        for r in bt_res:
+            scenario_table_data.append({
+                "シナリオ": f"[{r['id']}] {r['name']}",
+                "アルゴリズム": "🌟ルールベース" if r['strategy']=='rule_based' else "📈需要予測",
+                "MAPE": r["mape"],
+                "MAE": r["mae"],
+                "DTW": r["dtw"],
+                "RMSE": r["rmse"],
+                "Bias": r["bias"],
+                "Revenue Lift": r["lift"],
+                "廃棄損低減率": r["spoilage"],
+                "Composite Score": r["score"],
+                "Ref_strategy": r["strategy"],
+                "Ref_config": r["config"]
+            })
+            
+        res_df = pd.DataFrame(scenario_table_data)
+
+        # スコア降順にソート (Composite Scoreが高い順)
+        res_df = res_df.sort_values("Composite Score", ascending=False).reset_index(drop=True)
+
+        # 表示用DF
+        disp_df = res_df.copy()
+        disp_df["MAPE"] = disp_df["MAPE"].map(lambda x: f"{x:.1f}%")
+        disp_df["MAE"] = disp_df["MAE"].map(lambda x: f"{x:.1f}%")
+        disp_df["DTW"] = disp_df["DTW"].map(lambda x: f"{x:.3f}")
+        disp_df["RMSE"] = disp_df["RMSE"].map(lambda x: f"{x:.1f}%")
+        disp_df["Bias"] = disp_df["Bias"].map(lambda x: f"{x:+.1f}%")
+        disp_df["Revenue Lift"] = disp_df["Revenue Lift"].map(lambda x: f"{x:+.1f}%")
+        disp_df["廃棄損低減率"] = disp_df["廃棄損低減率"].map(lambda x: f"{x:+.1f}%")
+        disp_df["Composite Score"] = disp_df["Composite Score"].map(lambda x: f"{x:.1f}点")
+
+        # スコア1位に王冠をつける
+        if len(disp_df) > 0:
+            disp_df.loc[0, "シナリオ"] = "👑 " + disp_df.loc[0, "シナリオ"]
+
+        st.dataframe(light_dataframe(disp_df.drop(columns=["Ref_strategy", "Ref_config"])), use_container_width=True, hide_index=True)
+
+        st.markdown("### 💾 Section 4: 最適シナリオの登録")
+        st.write(f"決定したシナリオを `{target_category}` に登録（永続化）します。登録されたモデル設定は全体（本日のアクション等）に波及します。")
+
+        s_col1, s_col2 = st.columns([3, 1])
+        selected_sc_name = s_col1.selectbox("📝 登録するシナリオを選択", res_df["シナリオ"].tolist(), index=0)
+
+        st.write("")
+        if s_col2.button("💾 このシナリオを登録", type="primary", use_container_width=True):
+            sc_data = res_df[res_df["シナリオ"] == selected_sc_name].iloc[0]
+            
+            save_model_setting(
+                item_type=t_item, 
+                characteristic=t_char, 
+                strategy=sc_data["Ref_strategy"], 
+                config=sc_data["Ref_config"], 
+                score=sc_data["Composite Score"], 
+                mape=sc_data["MAPE"], 
+                lift=sc_data["Revenue Lift"], 
+                spoilage=sc_data["廃棄損低減率"]
+            )
+            st.success(f"{target_category} に {selected_sc_name} の設定を登録しました！")
 
 
 # ══════════════════════════════════════════════════════════════════
