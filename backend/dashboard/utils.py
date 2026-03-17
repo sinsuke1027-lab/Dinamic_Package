@@ -168,23 +168,22 @@ def apply_custom_css():
     div[data-testid="stRadio"] div[aria-label="MainNavigation"] div[role="radiogroup"] {{
         display: flex;
         justify-content: center;
-        gap: 8px;
-        background: {Theme.bg_tab_list};
+        gap: 6px;
+        background: #e2e8f0; /* 少し濃いグレー背景でエリア全体を明確に */
         padding: 6px;
-        border-radius: {Theme.radius_md};
-        border: 1px solid {Theme.border_light};
+        border-radius: 12px;
         width: 100%;
-        box-shadow: inset 0 2px 4px 0 rgba(0, 0, 0, 0.02);
+        box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.05);
     }}
     
     div[data-testid="stRadio"] div[aria-label="MainNavigation"] label[data-baseweb="radio"] {{
-        padding: 8px 20px !important;
-        border-radius: {Theme.radius_sm} !important;
-        transition: all 0.25s ease !important;
+        padding: 10px 20px !important;
+        border-radius: 8px !important;
+        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
         cursor: pointer !important;
-        border: 1px solid transparent !important;
+        border: 1px solid rgba(255, 255, 255, 0.4) !important;
         margin: 0 !important;
-        background: transparent !important;
+        background: rgba(255, 255, 255, 0.3) !important;
         flex: 1;
         text-align: center;
         min-width: 140px;
@@ -193,30 +192,36 @@ def apply_custom_css():
         align-items: center;
     }}
     
-    /* ホバー時 */
-    div[data-testid="stRadio"] div[aria-label="MainNavigation"] label[data-baseweb="radio"]:hover {{
+    /* ホバー時（未選択タブ） */
+    div[data-testid="stRadio"] div[aria-label="MainNavigation"] label[data-baseweb="radio"]:not(:has(input:checked)):hover {{
         background: rgba(255, 255, 255, 0.6) !important;
-        box-shadow: {Theme.shadow_sm} !important;
+        transform: translateY(-1px);
     }}
 
     /* 選択中のスタイル */
     div[data-testid="stRadio"] div[aria-label="MainNavigation"] label[data-baseweb="radio"]:has(input:checked) {{
-        background: {Theme.white} !important;
-        border-color: {Theme.border_light} !important;
-        box-shadow: {Theme.shadow_md} !important;
+        background: #ffffff !important;
+        border: 1px solid #cbd5e1 !important;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05), 0 1px 3px rgba(0, 0, 0, 0.1) !important;
+        transform: translateY(-2px);
+        z-index: 10;
     }}
     
+    /* 選択中の文字装飾 */
     div[data-testid="stRadio"] div[aria-label="MainNavigation"] label[data-baseweb="radio"]:has(input:checked) p {{
-        color: {Theme.primary_hover} !important; /* indigo-600 */
+        color: {Theme.primary_hover} !important; /* 選択時はアクセントカラー */
         font-weight: 800 !important;
+        font-size: 1rem !important;
     }}
     
+    /* 未選択時の文字装飾 */
     div[data-testid="stRadio"] div[aria-label="MainNavigation"] label[data-baseweb="radio"] p {{
-        color: {Theme.text_muted} !important; /* slate-500 */
+        color: #475569 !important; /* 未選択時はグレー */
         font-weight: 600 !important;
         margin: 0 !important;
-        font-size: {Theme.size_md} !important;
+        font-size: 0.95rem !important;
         text-align: center;
+        width: 100%;
     }}
 
     /* 全般的な入力ウィジェットのラベル文字色をダークグレーにする */
