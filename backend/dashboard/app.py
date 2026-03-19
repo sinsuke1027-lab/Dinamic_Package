@@ -58,7 +58,9 @@ from constants import (
     SIM_FINAL_SPRINT_DAYS, SIM_MARKUP_STEP_HIGH_PCT, SIM_MARKUP_STEP_LOW_PCT,
     SIM_MARKDOWN_STEP_HIGH_PCT, SIM_MARKDOWN_STEP_LOW_PCT, SIM_FORECAST_BOOST_PCT,
     SIM_ELASTICITY_PRICE_RATIO_HIGH_THRES, SIM_ELASTICITY_PRICE_RATIO_LOW_THRES,
-    SIM_ELASTICITY_DAMPEN_PCT, SIM_ELASTICITY_AMPLIFY_PCT
+    SIM_ELASTICITY_DAMPEN_PCT, SIM_ELASTICITY_AMPLIFY_PCT,
+    SIM_PRICE_MULTIPLIERS, SIM_PRICE_LOWER_BOUND_RATIO, SIM_PRICE_UPPER_BOUND_RATIO,
+    SIM_OPT_TARGET_PROFIT_INC_SPOILAGE, SIM_OPT_TARGET_GROSS_MARGIN, SIM_OPT_TARGET_REVENUE
 )
 # 共通ユーティリティのインポート
 from dashboard.theme import Theme
@@ -98,7 +100,7 @@ def load_history() -> pd.DataFrame:
     """, conn)
     conn.close()
     if not df.empty:
-        df["recorded_at"] = pd.to_datetime(df["recorded_at"], utc=True)
+        df["recorded_at"] = pd.to_datetime(df["recorded_at"], utc=True, format='ISO8601')
         df["recorded_at"] = df["recorded_at"].dt.tz_convert("Asia/Tokyo")
     return df
 
@@ -108,11 +110,12 @@ def load_booking_events() -> pd.DataFrame:
     df = pd.read_sql("SELECT * FROM booking_events", conn)
     conn.close()
     if not df.empty:
-        df["booked_at"] = pd.to_datetime(df["booked_at"], utc=True)
+        df["booked_at"] = pd.to_datetime(df["booked_at"], utc=True, format='ISO8601')
         df["booked_at"] = df["booked_at"].dt.tz_convert("Asia/Tokyo")
     return df
 
-def get_pricing_results(inv_df: pd.DataFrame, config: dict = None, strategy: str = "rule_based", reference_date: date = None) -> list[dict]:
+@st.cache_data(show_spinner=False, ttl=3600)
+def get_pricing_results(inv_df: pd.DataFrame, config: dict = None, strategy: str = "rule_based", reference_date: date = None, precomputed_metrics: dict = None) -> list[dict]:
     import sys, os
     if "model_evaluator" in sys.modules:
         del sys.modules["model_evaluator"]
@@ -134,12 +137,24 @@ def get_pricing_results(inv_df: pd.DataFrame, config: dict = None, strategy: str
         cls_data = get_product_classification(row["name"], item_type)
         if cls_data:
             char = cls_data["characteristic"]
+            # Inject seasonal targets into config
+            import copy
+            if applied_config:
+                applied_config = copy.deepcopy(applied_config)
+            else:
+                applied_config = {}
+                
+            applied_config["target_rate_peak"] = cls_data.get("target_rate_peak", 0.95)
+            applied_config["target_rate_normal"] = cls_data.get("target_rate_normal", 0.80)
+            applied_config["target_rate_offpeak"] = cls_data.get("target_rate_offpeak", 0.60)
+
             saved_setting = get_model_setting(item_type, char)
             if saved_setting:
                 applied_strategy = saved_setting["strategy"]
-                # 辞書型として保存されたスナップショットをそのままconfigとして使う
-                applied_config = saved_setting["config"]
-        # ───────────────────────────────────────────────────────────────────────
+                saved_config = saved_setting["config"]
+                # Override with saved conf but keep target rates
+                for k, v in saved_config.items():
+                    applied_config[k] = v
         
         # スライダーで上書き設定された基本弾力性があれば優先適用（なければDBまたは1.5）
         base_elasticity = config.get("sim_base_elasticity") if config and "sim_base_elasticity" in config else abs(row.get("elasticity", -1.5))
@@ -155,6 +170,7 @@ def get_pricing_results(inv_df: pd.DataFrame, config: dict = None, strategy: str
             config          = applied_config,
             strategy        = applied_strategy,
             reference_date  = reference_date,
+            precomputed_metrics = precomputed_metrics,
         )
         results.append(r)
     return results
@@ -248,6 +264,7 @@ st.markdown(f"""
 
 # ─── データロード ─────────────────────────────────────────────────
 inv_df     = load_inventory()
+events_df  = load_booking_events()
 history_df = load_history()
 
 if inv_df.empty:
@@ -358,10 +375,17 @@ with st.sidebar:
 # ─── 基準日（Virtual Today）に基づく在庫の再計算とフィルタリング ───
 v_today = st.session_state.get("virtual_today", datetime.now(timezone.utc).date())
 
-# 1. 基準日より過去（または当日）に出発する在庫を自動的に除外
+# 1. 基準日より過去に出発する在庫、またはまだ販売開始されていない在庫（120日より先）を自動的に除外
 filtered_inv_df = inv_df.copy()
 if not filtered_inv_df.empty:
-    filtered_inv_df = filtered_inv_df[pd.to_datetime(filtered_inv_df["departure_date"]).dt.date > v_today].copy()
+    departure_dates = pd.to_datetime(filtered_inv_df["departure_date"]).dt.date
+    # 出発日が基準日より未来であること
+    future_mask = departure_dates > v_today
+    # 販売開始されていること（出発日まで120日以内）
+    lead_days = (departure_dates - v_today).apply(lambda delta: delta.days)
+    selling_mask = lead_days <= 120
+    
+    filtered_inv_df = filtered_inv_df[future_mask & selling_mask].copy()
 
 # UI表示用に「商品名 (日付)」のカラムを作成
 if not filtered_inv_df.empty:
@@ -388,8 +412,21 @@ if not all_events.empty and not filtered_inv_df.empty:
 
 target_ids = filtered_inv_df["id"].tolist()
 
+# パフォーマンス最適化：メイン画面用の事前集計
+now_global = datetime.combine(v_today, datetime.max.time()).replace(tzinfo=timezone.utc)
+one_day_ago_g = now_global - timedelta(days=1)
+cutoff_14d_g = now_global - timedelta(days=14)
+
+df_24h_g = events_df[(events_df["booked_at"] >= one_day_ago_g) & (events_df["booked_at"] <= now_global)]
+actual_24h_map_g = df_24h_g.groupby("inventory_id")["quantity"].sum().to_dict()
+
+df_14d_g = events_df[(events_df["booked_at"] >= cutoff_14d_g) & (events_df["booked_at"] <= now_global)]
+actual_14d_map_g = df_14d_g.groupby("inventory_id")["quantity"].sum().to_dict()
+
+precomputed_g = {"actual_24h": actual_24h_map_g, "actual_14d": actual_14d_map_g}
+
 strategy_val = st.session_state.get("pricing_strategy", "rule_based")
-results = get_pricing_results(filtered_inv_df, config=ai_config, strategy=strategy_val, reference_date=v_today)
+results = get_pricing_results(filtered_inv_df, config=ai_config, strategy=strategy_val, reference_date=v_today, precomputed_metrics=precomputed_g)
 log_price_history(results, DB_PATH)
 history_df = load_history() # 履歴を再読み込みして最新化
 
@@ -405,8 +442,8 @@ for r in results:
     if inv_matches.empty: continue
     inv = inv_matches.iloc[0]
     try:
-        vr = get_velocity_ratio(r["inventory_id"], int(inv["total_stock"]), int(inv["remaining_stock"]), r["lead_days"], reference_date=v_today)
-        status = "🚨 Over" if vr > 1.5 else ("⚠️ Slow" if vr < 0.6 else "✅ Normal")
+        vr = get_velocity_ratio(r["inventory_id"], int(inv["total_stock"]), int(inv["remaining_stock"]), r["lead_days"], reference_date=v_today, precomputed_metrics=precomputed_g)
+        status = "🚨 Over" if vr and vr > 1.5 else ("⚠️ Slow" if vr and vr < 0.6 else "✅ Normal")
     except: vr, status = 0, "---"
     
     table_data.append({
@@ -422,19 +459,41 @@ table_df = pd.DataFrame(table_data)
 
 # ─── パッケージエンジン読み込み（全タブ共通） ─────────────────────
 curr_scenario = st.session_state.get("market_scenario", "base")
+
+@st.cache_data(show_spinner=False, ttl=3600)
+def cached_calculate_optimal_strategy(scenario, config, inventory_ids, current_prices, reference_date, precomputed_metrics):
+    return calculate_optimal_strategy(
+        scenario=scenario, 
+        config=config,
+        inventory_ids=inventory_ids,
+        current_prices=current_prices,
+        reference_date=reference_date,
+        precomputed_metrics=precomputed_metrics
+    )
+
+@st.cache_data(show_spinner=False, ttl=3600)
+def cached_calculate_roi_metrics(inventory_ids_tuple, reference_date):
+    return calculate_roi_metrics(inventory_ids=list(inventory_ids_tuple), reference_date=reference_date)
+
+@st.cache_data(show_spinner=False, ttl=3600)
+def cached_calculate_inventory_rescue_metrics(inventory_ids_tuple, reference_date):
+    return calculate_inventory_rescue_metrics(inventory_ids=list(inventory_ids_tuple), reference_date=reference_date)
+
 try:
-    roi_metrics = calculate_roi_metrics(inventory_ids=target_ids, reference_date=v_today)
-    rescue_metrics = calculate_inventory_rescue_metrics(inventory_ids=target_ids, reference_date=v_today)
+    target_ids_tuple = tuple(target_ids)
+    roi_metrics = cached_calculate_roi_metrics(target_ids_tuple, v_today)
+    rescue_metrics = cached_calculate_inventory_rescue_metrics(target_ids_tuple, v_today)
     
     # --- Prescriptive Analytics (Phase 14 / Phase 27) ---
     # AI現在価格（時価）をマッピングしてエンジンに渡す
     current_prices = {r["inventory_id"]: r["final_price"] for r in results}
-    optimal_strategy = calculate_optimal_strategy(
+    optimal_strategy = cached_calculate_optimal_strategy(
         scenario=curr_scenario, 
         config=ai_config,
         inventory_ids=target_ids,
         current_prices=current_prices,
-        reference_date=v_today
+        reference_date=v_today,
+        precomputed_metrics=precomputed_g
     )
 except Exception as _e:
     packages = []
@@ -447,6 +506,7 @@ except Exception as _e:
 
 # ─── ナビゲーションタブ ──────────────────────────────
 tabs = [
+    "📊 エグゼクティブ・サマリー",
     "🎯 本日のアクション",
     "🔍 販売シミュレータ(単体)",
     "🧪 販売シミュレータ（パッケージ）",
@@ -455,6 +515,429 @@ tabs = [
 ]
 selected_tab = st.radio("MainNavigation", tabs, horizontal=True, label_visibility="collapsed", key="main_nav_tab")
 
+# ══════════════════════════════════════════════════════════════════
+# Tab 1: 📊 エグゼクティブ・サマリー
+# ══════════════════════════════════════════════════════════════════
+if selected_tab == "📊 エグゼクティブ・サマリー":
+    import plotly.express as px
+    import plotly.graph_objects as go
+    
+    st.markdown("### 📊 エグゼクティブ・サマリー")
+    st.markdown('<p class="section-description">全体および各商品の販売状況と予測、顧客インサイトを俯瞰します。</p>', unsafe_allow_html=True)
+    
+    # ── グローバルフィルター ──
+    exec_filter = "全体 (ALL)"
+    
+    cat_col, date_col = st.columns([1, 2])
+    with cat_col:
+        exec_category = st.radio("分析対象（カテゴリ）", ["すべて", "ホテル", "フライト"], horizontal=True, key="exec_category_global")
+    with date_col:
+        default_start = (v_today - timedelta(days=30))
+        exec_date_range = st.date_input("分析対象期間 (出発日 [Departure Date])", value=(default_start, v_today), key="exec_date_range")
+    
+    if isinstance(exec_date_range, tuple) and len(exec_date_range) == 2:
+        start_date, end_date = exec_date_range
+    else:
+        start_date = exec_date_range[0] if isinstance(exec_date_range, tuple) else exec_date_range
+        end_date = start_date
+
+    # データをフィルタリング（出発日基準）
+    target_inv = inv_df[(pd.to_datetime(inv_df["departure_date"]).dt.date >= start_date) & (pd.to_datetime(inv_df["departure_date"]).dt.date <= end_date)]
+    if exec_filter != "全体 (ALL)":
+        target_inv = target_inv[target_inv["name"] == exec_filter]
+
+    target_inv_ids = target_inv["id"].tolist()
+    target_events = events_df[events_df["inventory_id"].isin(target_inv_ids)].copy()
+    
+    if not target_events.empty and not target_inv.empty:
+        target_events = target_events.merge(
+            target_inv[["id", "departure_date"]], 
+            left_on="inventory_id", 
+            right_on="id", 
+            how="left"
+        )
+        
+    def render_category_dashboard(cat_inv, cat_events, exec_fil, category_label):
+        if cat_inv.empty and cat_events.empty:
+            st.info("対象期間の商品実績がありません。")
+            return
+            
+        # イベントDFに商品名を結合（以降の集計で利用するため）
+        if not cat_events.empty:
+            if "name" in cat_inv.columns:
+                cat_events["product_name"] = cat_events["inventory_id"].map(cat_inv.set_index("id")["name"])
+            else:
+                cat_events["product_name"] = "Unknown"
+
+        # ── セクション1：最終着地KPI ──
+        st.markdown("#### 🏁 最終着地KPI（結果の評価）")
+        
+        total_sales_revenue = cat_events.apply(lambda r: r["quantity"] * r["sold_price"], axis=1).sum() if not cat_events.empty else 0
+        total_sales_volume = cat_events["quantity"].sum() if not cat_events.empty else 0
+        total_stock_capacity = cat_inv["total_stock"].sum() if not cat_inv.empty else 0
+        
+        load_factor = (total_sales_volume / total_stock_capacity * 100) if total_stock_capacity > 0 else 0
+        adr = (total_sales_revenue / total_sales_volume) if total_sales_volume > 0 else 0
+        
+        kpi1, kpi2, kpi3, kpi4 = st.columns(4)
+        with kpi1:
+            render_metric_card("最終売上高", f"¥{int(total_sales_revenue):,}", 
+                               subvalue=f"対象期間の確定売上", delta="", delta_color="normal")
+        with kpi2:
+            render_metric_card("最終販売数", f"{int(total_sales_volume):,} 件", 
+                               subvalue="対象期間の確定数", delta="", delta_color="normal")
+        with kpi3:
+            render_metric_card("最終在庫消化率", f"{load_factor:.1f}%", 
+                               subvalue="用意した枠の埋まり具合", delta="", delta_color="normal")
+        with kpi4:
+            render_metric_card("平均販売単価 (ADR)", f"¥{int(adr):,}", 
+                               subvalue="1件あたりの平均単価", delta="", delta_color="normal")
+                               
+        st.markdown("---")
+
+        # ── セクション2：商品の通信簿 または DNA ──
+        if exec_fil == "全体 (ALL)":
+            st.markdown("#### 🏆 商品の実績通信簿（振り返りランキング ＆ 詳細ヒートマップ）")
+            st.markdown('<p class="section-description">指定した期間に出発した商品の成功・反省点の総括と、商品×出発日の詳細なマトリックス分析を行います。</p>', unsafe_allow_html=True)
+            
+            tab_summary, tab_heatmap = st.tabs(["📝 サマリー評価", "🟧 詳細ヒートマップ"])
+            
+            with tab_summary:
+                if not cat_inv.empty:
+                    summary_list = []
+                    for name, group in cat_inv.groupby("name"):
+                        grp_ids = group["id"].tolist()
+                        grp_evs = cat_events[cat_events["inventory_id"].isin(grp_ids)]
+                        grp_rev = grp_evs.apply(lambda r: r["quantity"] * r["sold_price"], axis=1).sum() if not grp_evs.empty else 0
+                        grp_vol = grp_evs["quantity"].sum() if not grp_evs.empty else 0
+                        grp_cap = group["total_stock"].sum()
+                        grp_lf = (grp_vol / grp_cap * 100) if grp_cap > 0 else 0
+                        summary_list.append({"商品名": name, "売上": grp_rev, "消化率": grp_lf, "販売数": grp_vol})
+                        
+                    summary_df = pd.DataFrame(summary_list)
+                    top3_rev = summary_df.sort_values(by="売上", ascending=False).head(3)
+                    worst3_lf = summary_df.sort_values(by="消化率", ascending=True).head(3)
+                    
+                    col_s, col_w = st.columns(2)
+                    with col_s:
+                        st.success("🌟 サクセス実績 (売上額トップ3)")
+                        for _, row in top3_rev.iterrows():
+                            if int(row['売上']) > 0:
+                                st.markdown(f"**{row['商品名']}**: 売上 ¥{int(row['売上']):,} (消化率 {row['消化率']:.1f}%)")
+                            else:
+                                st.markdown(f"**{row['商品名']}**: 売上なし")
+                    with col_w:
+                        st.error("⚠️ 反省・課題商品 (消化率ワースト3)")
+                        for _, row in worst3_lf.iterrows():
+                            st.markdown(f"**{row['商品名']}**: 消化率 {row['消化率']:.1f}% (売上 ¥{int(row['売上']):,})")
+            
+            with tab_heatmap:
+                hm_metric = st.selectbox("評価指標の切り替え", 
+                                         ["最終利益金額 (Net Profit) [千円]", "販売粗利 (Gross Profit) [千円]", "トップライン (Revenue) [千円]", "販売数 (Volume) [件]"],
+                                         key=f"hm_metric_{category_label}")
+                
+                if not cat_inv.empty and not cat_events.empty:
+                    heatmap_events = cat_events.copy()
+                    
+                    # 1. 疑似コストの算出（シミュレータに合わせ、直近平均売価の40%を原価とする）
+                    avg_prices = heatmap_events.groupby("product_name")["sold_price"].mean().reset_index()
+                    avg_prices.rename(columns={"sold_price": "avg_price"}, inplace=True)
+                    avg_prices["unit_cost"] = avg_prices["avg_price"] * 0.4
+                    
+                    # 2. ベースとなる [商品 × 出発日] マトリックスの作成
+                    hm_base = cat_inv.copy()
+                    hm_base["dep_date_str"] = pd.to_datetime(hm_base["departure_date"]).dt.strftime('%m/%d')
+                    hm_base = hm_base.groupby(["name", "dep_date_str"]).agg(total_stock=("total_stock", "sum")).reset_index()
+                    hm_base.rename(columns={"name": "product_name"}, inplace=True)
+                    
+                    # 3. イベント実績の集計
+                    heatmap_events["dep_date_str"] = pd.to_datetime(heatmap_events["departure_date"]).dt.strftime('%m/%d')
+                    heatmap_events["revenue"] = heatmap_events["quantity"] * heatmap_events["sold_price"]
+                    ev_agg = heatmap_events.groupby(["product_name", "dep_date_str"]).agg(
+                        volume=("quantity", "sum"),
+                        revenue=("revenue", "sum")
+                    ).reset_index()
+                    
+                    hm_data = hm_base.merge(ev_agg, on=["product_name", "dep_date_str"], how="left").fillna(0)
+                    hm_data = hm_data.merge(avg_prices[["product_name", "unit_cost"]], on="product_name", how="left")
+                    hm_data["unit_cost"] = hm_data["unit_cost"].fillna(0)
+                    
+                    # 4. 指標ごとの計算
+                    hm_data["gross_profit"] = hm_data["revenue"] - (hm_data["volume"] * hm_data["unit_cost"])
+                    hm_data["net_profit"] = hm_data["revenue"] - (hm_data["total_stock"] * hm_data["unit_cost"])
+                    
+                    if "最終利益金額" in hm_metric:
+                        z_col = "net_profit"
+                        hm_data[z_col] = hm_data[z_col] / 1000.0
+                        colorscale = "RdBu"
+                        val_format = "%{z:,.1f}"
+                    elif "販売粗利" in hm_metric:
+                        z_col = "gross_profit"
+                        hm_data[z_col] = hm_data[z_col] / 1000.0
+                        colorscale = "RdBu"
+                        val_format = "%{z:,.1f}"
+                    elif "トップライン" in hm_metric:
+                        z_col = "revenue"
+                        hm_data[z_col] = hm_data[z_col] / 1000.0
+                        colorscale = "RdBu"
+                        val_format = "%{z:,.1f}"
+                    else:
+                        z_col = "volume"
+                        colorscale = "RdBu"
+                        val_format = "%{z:,.0f}"
+                        
+                    # ピボットテーブル化
+                    pivot_df = hm_data.pivot(index="product_name", columns="dep_date_str", values=z_col).fillna(0)
+                    
+                    # 視認性のため最大20件（売上合計順）に絞る
+                    if len(pivot_df) > 20:
+                        top_products = hm_data.groupby("product_name")["revenue"].sum().nlargest(20).index
+                        pivot_df = pivot_df.loc[top_products]
+                        
+                    # データの平均値を算出し、それをカラースケールの中央 (zmid) とする
+                    midpoint = float(pivot_df.values.mean()) if pivot_df.size > 0 else 0
+                    
+                    # グラフ描画
+                    fig_hm = go.Figure(data=go.Heatmap(
+                        z=pivot_df.values,
+                        x=pivot_df.columns,
+                        y=pivot_df.index,
+                        colorscale=colorscale,
+                        zmid=midpoint,
+                        texttemplate=val_format,
+                        textfont={"size": 16},
+                        hoverongaps=False
+                    ))
+                    
+                    chart_height = max(300, len(pivot_df.index) * 40)
+                    fig_hm.update_layout(
+                        height=chart_height,
+                        margin=dict(t=20, l=150, r=20, b=40),
+                        yaxis=dict(autorange="reversed", title="", tickfont=dict(size=16, color="black")),
+                        xaxis=dict(tickfont=dict(size=16, color="black"))
+                    )
+                    
+                    st.plotly_chart(fig_hm, use_container_width=True)
+                else:
+                    st.info("対象のデータがありません。")
+            st.markdown("---")
+            
+        else:
+            st.markdown("#### 🧬 プロダクトDNA（商品特性）")
+            st.markdown('<p class="section-description">対象期間の販売データに基づく、この商品の「実績としての特徴」をバッジとして表示します。</p>', unsafe_allow_html=True)
+            
+            if not cat_events.empty and "booked_at" in cat_events.columns and "departure_date" in cat_events.columns:
+                dep_dates = pd.to_datetime(cat_events["departure_date"]).dt.tz_localize(None)
+                book_dates = pd.to_datetime(cat_events["booked_at"]).dt.tz_localize(None)
+                lead_times = (dep_dates - book_dates).dt.days
+                
+                median_lt = lead_times.median() if not lead_times.isna().all() else 0
+                if median_lt <= 7:
+                    lt_badge = "直前駆け込み型 (7日以内)"
+                    lt_color = Theme.warning 
+                elif median_lt <= 30:
+                    lt_badge = "標準リードタイム (約1ヶ月)"
+                    lt_color = Theme.primary 
+                else:
+                    lt_badge = "早期予約型 (30日以降)"
+                    lt_color = Theme.success 
+                    
+                cat_events_copy = cat_events.copy()
+                if "age_group" in cat_events_copy.columns and "gender" in cat_events_copy.columns:
+                    cat_events_copy["segment"] = cat_events_copy["age_group"].astype(str) + " " + cat_events_copy["gender"].astype(str)
+                    top_segment = cat_events_copy["segment"].mode()[0] if not cat_events_copy["segment"].mode().empty else "不明"
+                else:
+                    top_segment = "分析不可"
+                    
+                if "companion_count" in cat_events_copy.columns:
+                    party_sizes = cat_events_copy["companion_count"] + 1
+                    median_party = party_sizes.median() if not party_sizes.isna().all() else 0
+                    if median_party <= 1.5:
+                        party_badge = "ソロ・少人数メイン"
+                    elif median_party <= 2.5:
+                        party_badge = "ペア・カップルメイン"
+                    else:
+                        party_badge = "ファミリー・グループメイン"
+                else:
+                    party_badge = "不明"
+                    
+                badge_style = "display: inline-block; padding: 6px 14px; margin-right: 12px; margin-bottom: 8px; border-radius: 16px; font-size: 0.9rem; font-weight: 600; color: white;"
+                html = f"""
+                <div style='margin-bottom: 1rem;'>
+                    <span style='{badge_style} background-color: {lt_color};'>⏱️ {lt_badge}</span>
+                    <span style='{badge_style} background-color: #4f46e5;'>👥 {top_segment}中心</span>
+                    <span style='{badge_style} background-color: #0ea5e9;'>👨‍👩‍👧‍👦 {party_badge}</span>
+                </div>
+                """
+                st.markdown(html, unsafe_allow_html=True)
+            st.markdown("---")
+
+        # ── セクション3：トレンドと顧客インサイト（クロス集計） ──
+        st.markdown("#### 📊 ドリルダウン分析（売れの軌跡 ＆ 顧客インサイト）")
+        col_c, col_i = st.columns([1.5, 1.2])
+        
+        with col_c:
+            st.markdown("##### 📉 リードタイム別 販売推移")
+            tab_vol, tab_adr = st.tabs(["🛒 販売数（ポテンシャル）", "💰 平均単価（ADR推移）"])
+            
+            if not cat_events.empty:
+                curve_events = cat_events.copy()
+                dep_dates = pd.to_datetime(curve_events["departure_date"]).dt.tz_localize(None)
+                book_dates = pd.to_datetime(curve_events["booked_at"]).dt.tz_localize(None)
+                curve_events["lead_time"] = (dep_dates - book_dates).dt.days
+                curve_events["lead_time"] = curve_events["lead_time"].apply(lambda x: max(0, x))
+                
+                # 販売数（累積）
+                with tab_vol:
+                    st.markdown("<div style='height: 75px;'></div>", unsafe_allow_html=True)
+                    vol_agg = curve_events.groupby(["product_name", "lead_time"])["quantity"].sum().reset_index()
+                    vol_agg = vol_agg.sort_values(["product_name", "lead_time"], ascending=[True, False])
+                    vol_agg["cumulative_quantity"] = vol_agg.groupby("product_name")["quantity"].cumsum()
+                    
+                    fig_vol = px.line(vol_agg, x="lead_time", y="cumulative_quantity", color="product_name",
+                                      markers=True, color_discrete_sequence=px.colors.qualitative.Pastel)
+                    fig_vol = light_layout(fig_vol, yaxis_title="累積販売数")
+                    fig_vol.update_xaxes(title_text="リードタイム（出発の〇日前）", autorange="reversed", tickfont=dict(size=12, color="black"))
+                    fig_vol.update_yaxes(tickfont=dict(size=12, color="black"))
+                    fig_vol.update_layout(height=420, margin=dict(t=10, b=0, l=0, r=0), legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1, title="商品名"))
+                    st.plotly_chart(fig_vol, use_container_width=True)
+                
+                # 平均単価（ADR推移）
+                with tab_adr:
+                    st.markdown("<div style='height: 75px;'></div>", unsafe_allow_html=True)
+                    curve_events["revenue"] = curve_events["quantity"] * curve_events["sold_price"]
+                    adr_agg = curve_events.groupby(["product_name", "lead_time"])[["quantity", "revenue"]].sum().reset_index()
+                    adr_agg["ADR"] = adr_agg["revenue"] / adr_agg["quantity"]
+                    
+                    fig_adr = px.line(adr_agg, x="lead_time", y="ADR", color="product_name",
+                                      markers=True, color_discrete_sequence=px.colors.qualitative.Pastel)
+                    fig_adr = light_layout(fig_adr, yaxis_title="平均単価 (¥)")
+                    fig_adr.update_xaxes(title_text="リードタイム（出発の〇日前）", autorange="reversed", tickfont=dict(size=12, color="black"))
+                    fig_adr.update_yaxes(tickfont=dict(size=12, color="black"))
+                    fig_adr.update_layout(height=420, margin=dict(t=10, b=0, l=0, r=0), legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1, title="商品名"))
+                    st.plotly_chart(fig_adr, use_container_width=True)
+            else:
+                st.info("対象期間の販売実績がありません。")
+
+        with col_i:
+            st.markdown("##### 👥 顧客インサイト（クロス集計）")
+            
+            tab_struct, tab_popular = st.tabs(["商品別の客層構造", "客層別の人気商品"])
+            
+            if not cat_events.empty:
+                demog_events = cat_events.copy()
+                
+                # --- タブ1：商品別の客層構造 ---
+                with tab_struct:
+                    ctrl1, ctrl2 = st.columns(2)
+                    with ctrl1:
+                        anal_dim_struct = st.selectbox("分析する属性", ["年代 (Age)", "性別 (Gender)", "同行者 (Companions)"], key=f"dim_struct_{category_label}")
+                    with ctrl2:
+                        anal_disp_struct = st.radio("表示形式", ["100%積み上げ", "販売数 (絶対数)"], key=f"disp_struct_{category_label}", horizontal=True)
+
+                    dim_col_map = {"年代 (Age)": "age_group", "性別 (Gender)": "gender", "同行者 (Companions)": "companion_label"}
+                    dim_col = dim_col_map[anal_dim_struct]
+                    
+                    df_struct = demog_events.copy()
+                    if dim_col == "companion_label" and "companion_count" in df_struct.columns:
+                        def get_comp_label(c):
+                            if c == 0: return "ソロ (1名)"
+                            elif c == 1: return "ペア (2名)"
+                            elif c == 2: return "トリオ (3名)"
+                            else: return "グループ (4名)"
+                        df_struct["companion_label"] = df_struct["companion_count"].apply(get_comp_label)
+                    elif dim_col not in df_struct.columns:
+                        df_struct[dim_col] = "不明"
+                        
+                    cat_orders = {}
+                    if dim_col == "companion_label":
+                        cat_orders = {dim_col: ["ソロ (1名)", "ペア (2名)", "トリオ (3名)", "グループ (4名)"]}
+                    elif dim_col == "age_group":
+                        cat_orders = {dim_col: ["10代", "20代", "30代", "40代", "50代", "60代", "70代以上"]}
+
+                    demog_agg = df_struct.groupby(["product_name", dim_col])["quantity"].sum().reset_index()
+                    fig_demo1 = px.bar(demog_agg, x="product_name", y="quantity", color=dim_col,
+                                      color_discrete_sequence=px.colors.qualitative.Pastel,
+                                      category_orders=cat_orders)
+                    
+                    if anal_disp_struct == "100%積み上げ":
+                        fig_demo1 = light_layout(fig_demo1, yaxis_title="シェア (%)")
+                        fig_demo1.update_layout(barmode='stack', barnorm='percent', height=420, margin=dict(t=10, b=0, l=0, r=0), 
+                                               legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1, title=anal_dim_struct.split(" (")[0]))
+                        fig_demo1.update_yaxes(ticksuffix="", tickfont=dict(size=12, color="black"))
+                    else:
+                        fig_demo1 = light_layout(fig_demo1, yaxis_title="販売数")
+                        fig_demo1.update_layout(barmode='stack', height=420, margin=dict(t=10, b=0, l=0, r=0), 
+                                               legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1, title=anal_dim_struct.split(" (")[0]))
+                        fig_demo1.update_yaxes(tickfont=dict(size=12, color="black"))
+                    
+                    fig_demo1.update_xaxes(tickfont=dict(size=12, color="black"))
+                    st.plotly_chart(fig_demo1, use_container_width=True)
+
+                # --- タブ2：客層別の人気商品 ---
+                with tab_popular:
+                    ctrl1, ctrl2 = st.columns(2)
+                    with ctrl1:
+                        anal_dim_pop = st.selectbox("分析する属性", ["年代 (Age)", "性別 (Gender)", "同行者 (Companions)"], key=f"dim_pop_{category_label}")
+                    with ctrl2:
+                        anal_disp_pop = st.radio("表示形式", ["100%積み上げ", "販売数 (絶対数)"], key=f"disp_pop_{category_label}", horizontal=True)
+
+                    dim_col_p = dim_col_map[anal_dim_pop]
+                    
+                    df_pop = demog_events.copy()
+                    if dim_col_p == "companion_label" and "companion_count" in df_pop.columns:
+                        def get_comp_label_p(c):
+                            if c == 0: return "ソロ (1名)"
+                            elif c == 1: return "ペア (2名)"
+                            elif c == 2: return "トリオ (3名)"
+                            else: return "グループ (4名)"
+                        df_pop["companion_label"] = df_pop["companion_count"].apply(get_comp_label_p)
+                    elif dim_col_p not in df_pop.columns:
+                        df_pop[dim_col_p] = "不明"
+
+                    cat_orders_p = {}
+                    if dim_col_p == "companion_label":
+                        cat_orders_p = {dim_col_p: ["ソロ (1名)", "ペア (2名)", "トリオ (3名)", "グループ (4名)"]}
+                    elif dim_col_p == "age_group":
+                        cat_orders_p = {dim_col_p: ["10代", "20代", "30代", "40代", "50代", "60代", "70代以上"]}
+
+                    demog_agg_p = df_pop.groupby([dim_col_p, "product_name"])["quantity"].sum().reset_index()
+                    fig_demo2 = px.bar(demog_agg_p, x=dim_col_p, y="quantity", color="product_name",
+                                      color_discrete_sequence=px.colors.qualitative.Pastel,
+                                      category_orders=cat_orders_p)
+                                      
+                    if anal_disp_pop == "100%積み上げ":
+                        fig_demo2 = light_layout(fig_demo2, yaxis_title="シェア (%)")
+                        fig_demo2.update_layout(barmode='stack', barnorm='percent', height=420, margin=dict(t=10, b=0, l=0, r=0), 
+                                               legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1, title="商品名"))
+                        fig_demo2.update_yaxes(ticksuffix="", tickfont=dict(size=12, color="black"))
+                    else:
+                        fig_demo2 = light_layout(fig_demo2, yaxis_title="販売数")
+                        fig_demo2.update_layout(barmode='stack', height=420, margin=dict(t=10, b=0, l=0, r=0), 
+                                               legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1, title="商品名"))
+                        fig_demo2.update_yaxes(tickfont=dict(size=12, color="black"))
+                                               
+                    fig_demo2.update_xaxes(tickfont=dict(size=12, color="black"))
+                    st.plotly_chart(fig_demo2, use_container_width=True)
+            else:
+                st.info("対象期間のイベントデータがありません。")
+    # --- ホテル パフォーマンス ---
+    if exec_category in ["すべて", "ホテル"]:
+        hotel_inv = target_inv[target_inv["item_type"] == "hotel"]
+        hotel_events = target_events[target_events["inventory_id"].isin(hotel_inv["id"].tolist())]
+        if (not hotel_inv.empty or not hotel_events.empty) and (exec_filter == "全体 (ALL)" or exec_filter in hotel_inv["name"].tolist()):
+            st.markdown("### 🏨 ホテル・パフォーマンス")
+            render_category_dashboard(hotel_inv, hotel_events, exec_filter, "hotel")
+    
+        st.markdown("<br><br>", unsafe_allow_html=True)
+    
+    # --- フライト パフォーマンス ---
+    if exec_category in ["すべて", "フライト"]:
+        flight_inv = target_inv[target_inv["item_type"] == "flight"]
+        flight_events = target_events[target_events["inventory_id"].isin(flight_inv["id"].tolist())]
+        if (not flight_inv.empty or not flight_events.empty) and (exec_filter == "全体 (ALL)" or exec_filter in flight_inv["name"].tolist()):
+            st.markdown("### ✈️ フライト・パフォーマンス")
+            render_category_dashboard(flight_inv, flight_events, exec_filter, "flight")
 
 # ══════════════════════════════════════════════════════════════════
 # Tab 2: 【アクション】Today's Action
@@ -498,57 +981,93 @@ if selected_tab == "🎯 本日のアクション":
     if not recs:
         st.info("商品データがないため、推奨アクションを計算できませんでした。")
     else:
-        # パッケージ推奨カード（緑系）― 出発日インパクト順に表示
-        sorted_bundle_recs = sorted(bundle_recs, key=lambda r: r.get("gain", 0), reverse=True)
-        for rec in sorted_bundle_recs:
+        # すべての推奨アクションを集約して利益(gain)順にソート
+        all_recs = sorted(bundle_recs + standalone_recs, key=lambda r: r.get("gain", 0), reverse=True)
+        top_recs = all_recs[:3]
+        other_recs = all_recs[3:]
+        
+        week_kanji = ["月", "火", "水", "木", "金", "土", "日"]
+        from datetime import datetime as _dt
+        
+        # トップ3アイテムの表示（カレンダー付き詳細カード）
+        for rank, rec in enumerate(top_recs, 1):
+            is_bundle = (rec["strategy"] == "bundle")
             item_icon = "🏨" if rec["item_type"] == "hotel" else "✈️"
             dep_date  = rec.get("departure_date", "---")
-            # 日付表示用に整形（YYYY-MM-DD → M/D）
+            
             try:
-                from datetime import datetime as _dt
-                dep_label = _dt.strptime(dep_date[:10], "%Y-%m-%d").strftime("%-m/%-d")
+                dep_dt = _dt.strptime(dep_date[:10], "%Y-%m-%d").date()
+                dep_label = f"{dep_dt.month}/{dep_dt.day}"
+                end_str = f"{dep_dt.month}/{dep_dt.day}({week_kanji[dep_dt.weekday()]})"
+                start_str = f"{v_today.month}/{v_today.day}({week_kanji[v_today.weekday()]})"
+                cal_date_str = f"{start_str} 〜 {end_str}"
             except Exception:
                 dep_label = dep_date
-            st.markdown(f"""
-            <div style="background:rgba(16,185,129,0.08); border:1px solid rgba(16,185,129,0.5); border-radius:14px; padding:18px; margin:8px 0;">
-                <div style="display:flex; gap:10px; align-items:center; margin-bottom:8px; flex-wrap:wrap;">
-                    <div style="background:{Theme.success}; color:{Theme.white}; border-radius:8px; padding:4px 10px; font-size:0.75rem; font-weight:900; white-space:nowrap;">
-                        📦 パッケージ推奨
-                    </div>
-                    <div style="background:rgba(99,102,241,0.2); color:#a5b4fc; border:1px solid rgba(99,102,241,0.4); border-radius:6px; padding:3px 10px; font-size:0.8rem; font-weight:700;">
-                        📅 {dep_label}出発
-                    </div>
-                    <div style="color:{Theme.chart_accent}; font-size:{Theme.size_md}; font-weight:600; margin-left:auto;">+¥{rec['gain']:,} 改善</div>
-                </div>
-                <div style="font-size:1rem; font-weight:800; color:{Theme.text_dark}; margin-bottom:6px;">
-                    {item_icon} {rec['item_name']} ＋ ✈️ {rec['partner_name']}
-                </div>
-                <div style="display:flex; gap:16px; flex-wrap:wrap; margin-bottom:6px;">
-                    <span style="color:{Theme.success}; font-weight:700;">推奨価格: ¥{rec['optimal_price']:,}</span>
-                    <span style="color:{Theme.text_muted};">上限セット数: {rec['max_sets']} セット</span>
-                </div>
-                <div style="font-size:{Theme.size_md}; color:{Theme.text_sec};">{rec['reason']}</div>
-            </div>
-            """, unsafe_allow_html=True)
+                cal_date_str = f"本日 〜 {dep_date}"
+            
+            calendar_html = f"""<div style="margin-top:12px; padding-top:12px; border-top:1px dashed rgba(0,0,0,0.1);">
+<div style="font-size:0.85rem; font-weight:bold; color:{Theme.primary}; margin-bottom:8px;">🎯 推奨価格設定カレンダー</div>
+<div style="display:flex; gap:10px; align-items:center; background:{Theme.white}; border-left:4px solid {Theme.warning}; border-radius:4px; padding:10px; box-shadow:0 1px 2px rgba(0,0,0,0.05);">
+<div style="font-size:0.85rem; color:{Theme.text_muted}; width:130px;">📅 {cal_date_str}</div>
+<div style="font-size:1.1rem; font-weight:bold; color:{Theme.text_dark};">¥{rec['optimal_price']:,.0f}</div>
+<div style="font-size:0.75rem; color:{Theme.text_muted}; margin-left:auto;">{('バンドル固定価格' if is_bundle else '単品維持価格')}</div>
+</div>
+</div>"""
+            
+            if is_bundle:
+                card_style = f"background:rgba(16,185,129,0.08); border:1px solid rgba(16,185,129,0.5); border-radius:14px; padding:18px; margin:8px 0;"
+                badge_html = f'<div style="background:{Theme.success}; color:{Theme.white}; border-radius:8px; padding:4px 10px; font-size:0.75rem; font-weight:900; white-space:nowrap;">📦 パッケージ推奨</div>'
+                gain_html = f"<div style='color:{Theme.success}; font-weight:700;'>推奨価格: ¥{rec['optimal_price']:,}</div><div style='color:{Theme.text_muted};'>上限セット数: {rec['max_sets']} セット</div>"
+                title_html = f"{item_icon} {rec['item_name']} ＋ ✈️ {rec['partner_name']}"
+                impact_html = f"<div style='color:{Theme.chart_accent}; font-size:{Theme.size_md}; font-weight:600; margin-left:auto;'>+¥{rec['gain']:,} 改善</div>"
+            else:
+                card_style = f"background:rgba(100,116,139,0.05); border:1px solid rgba(100,116,139,0.3); border-radius:14px; padding:18px; margin:8px 0;"
+                badge_html = f'<div style="background:{Theme.text_muted}; color:{Theme.white}; border-radius:8px; padding:4px 10px; font-size:0.75rem; font-weight:900; white-space:nowrap;">⚪ 単品維持</div>'
+                gain_html = f"<div style='color:{Theme.text_sec}; font-weight:700;'>現行価格維持: ¥{rec['optimal_price']:,}</div>"
+                title_html = f"{item_icon} {rec['item_name']}"
+                impact_html = ""
+                
+            rank_badge = f"<div style='width:24px; height:24px; border-radius:50%; background:{Theme.primary}; color:white; display:flex; align-items:center; justify-content:center; font-size:0.8rem; font-weight:bold;'>{rank}</div>"
 
-        # 単品維持カード（グレー系）
-        with st.expander(f"⚪ 単品維持 ({len(standalone_recs)}商品) — 現行価格を維持"):
-            for rec in standalone_recs:
-                item_icon = "🏨" if rec["item_type"] == "hotel" else "✈️"
-                dep_date  = rec.get("departure_date", "---")
-                try:
-                    from datetime import datetime as _dt
-                    dep_label = _dt.strptime(dep_date[:10], "%Y-%m-%d").strftime("%-m/%-d")
-                except Exception:
-                    dep_label = dep_date
-                st.markdown(f"""
-                <div style="background:rgba(100,116,139,0.1); border:1px solid rgba(100,116,139,0.4); border-radius:10px; padding:12px; margin:6px 0; display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
-                    <span style="background:rgba(99,102,241,0.15); color:#a5b4fc; border-radius:6px; padding:2px 8px; font-size:{Theme.size_sm}; font-weight:700;">📅 {dep_label}</span>
-                    <span style="font-weight:700; color:{Theme.text_sec};">{item_icon} {rec['item_name']}</span>
-                    <span style="color:{Theme.text_sec}; font-size:{Theme.size_md};">現行価格: ¥{rec['optimal_price']:,}</span>
-                    <div style="width:100%; font-size:{Theme.size_xs}; color:{Theme.text_muted}; margin-top:4px;">{rec['reason']}</div>
-                </div>
-                """, unsafe_allow_html=True)
+            st.markdown(f"""<div style="{card_style}">
+<div style="display:flex; gap:10px; align-items:center; margin-bottom:8px; flex-wrap:wrap;">
+{rank_badge} {badge_html} <div style="background:rgba(99,102,241,0.2); color:#a5b4fc; border:1px solid rgba(99,102,241,0.4); border-radius:6px; padding:3px 10px; font-size:0.8rem; font-weight:700;">📅 {dep_label}出発</div> {impact_html}
+</div>
+<div style="font-size:1rem; font-weight:800; color:{Theme.text_dark}; margin-bottom:6px;">{title_html}</div>
+<div style="display:flex; gap:16px; flex-wrap:wrap; margin-bottom:6px; font-size:0.9rem;">{gain_html}</div>
+<div style="font-size:{Theme.size_md}; color:{Theme.text_sec}; margin-bottom:4px;">{rec['reason']}</div>
+{calendar_html}
+</div>""", unsafe_allow_html=True)
+
+        # 4件目以降のアイテム（折りたたみ表示）
+        if other_recs:
+            with st.expander(f"その他の推奨アクションを見る ({len(other_recs)}件)"):
+                for rec in other_recs:
+                    is_bundle = (rec["strategy"] == "bundle")
+                    item_icon = "🏨" if rec["item_type"] == "hotel" else "✈️"
+                    dep_date  = rec.get("departure_date", "---")
+                    try:
+                        dep_label = _dt.strptime(dep_date[:10], "%Y-%m-%d").strftime("%-m/%-d")
+                    except Exception:
+                        dep_label = dep_date
+                        
+                    if is_bundle:
+                        st.markdown(f"""<div style="background:rgba(16,185,129,0.05); border:1px solid rgba(16,185,129,0.3); border-radius:10px; padding:12px; margin:6px 0; display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+<span style="background:{Theme.success}; color:{Theme.white}; border-radius:6px; padding:2px 6px; font-size:0.7rem; font-weight:bold;">📦 パッケージ</span>
+<span style="background:rgba(99,102,241,0.15); color:#a5b4fc; border-radius:6px; padding:2px 8px; font-size:{Theme.size_sm}; font-weight:700;">📅 {dep_label}</span>
+<span style="font-weight:700; color:{Theme.text_dark};">{item_icon} {rec['item_name']} ＋ ✈️ {rec['partner_name']}</span>
+<span style="color:{Theme.success}; font-size:{Theme.size_md}; font-weight:bold;">推奨価格: ¥{rec['optimal_price']:,}</span>
+<span style="color:{Theme.chart_accent}; font-size:{Theme.size_md}; font-weight:bold; margin-left:auto;">+¥{rec['gain']:,}</span>
+<div style="width:100%; font-size:{Theme.size_xs}; color:{Theme.text_muted}; margin-top:4px;">{rec['reason']}</div>
+</div>""", unsafe_allow_html=True)
+                    else:
+                        st.markdown(f"""<div style="background:rgba(100,116,139,0.05); border:1px solid rgba(100,116,139,0.3); border-radius:10px; padding:12px; margin:6px 0; display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+<span style="background:{Theme.text_muted}; color:{Theme.white}; border-radius:6px; padding:2px 6px; font-size:0.7rem; font-weight:bold;">⚪ 単品維持</span>
+<span style="background:rgba(99,102,241,0.15); color:#a5b4fc; border-radius:6px; padding:2px 8px; font-size:{Theme.size_sm}; font-weight:700;">📅 {dep_label}</span>
+<span style="font-weight:700; color:{Theme.text_sec};">{item_icon} {rec['item_name']}</span>
+<span style="color:{Theme.text_sec}; font-size:{Theme.size_md}; font-weight:bold;">現行価格: ¥{rec['optimal_price']:,}</span>
+<div style="width:100%; font-size:{Theme.size_xs}; color:{Theme.text_muted}; margin-top:4px;">{rec['reason']}</div>
+</div>""", unsafe_allow_html=True)
 
     st.markdown("---")
     st.markdown("#### 🚚 商品一覧 & 異常検知")
@@ -694,6 +1213,7 @@ if selected_tab == "🔍 販売シミュレータ(単体)":
                 horizontal=False,
                 key="pred_compare_mode"
             )
+            
             if compare_mode == "一定期間ごとで単価を固定":
                 fixed_interval = st.selectbox("単価固定期間", [3, 7, 14, 30], index=1, format_func=lambda x: f"{x}日間ごと", key="fixed_interval_days", label_visibility="collapsed")
             else:
@@ -709,6 +1229,32 @@ if selected_tab == "🔍 販売シミュレータ(単体)":
     dep_date = pd.to_datetime(inv_sel["departure_date"]).date()
     total_stock_sel = max(1, int(inv_sel["total_stock"]))
     
+    # 過去実績のシーズンの自動判定
+    dep_month = pd.to_datetime(inv_sel["departure_date"]).month
+    if dep_month in [5, 7, 8]:
+        season_filter = "繁忙期 (5, 7, 8月)"
+    elif dep_month in [2, 6, 11]:
+        season_filter = "閑散期 (2, 6, 11月)"
+    else:
+        season_filter = "中間期 (その他)"
+
+    # ---- 追加機能：最適化目標の選択 (What-If分析パネル上部への配置・変数取得) ----
+    col_whatif_title, col_whatif_sel = st.columns([5, 3])
+    with col_whatif_title:
+        st.markdown(
+            f"<div style='font-size:1.15rem; color:{Theme.text_dark}; margin-top:20px; font-weight:bold;'>💡 What-If 分析結果明細 (最終着地推計)</div>", 
+            unsafe_allow_html=True
+        )
+    with col_whatif_sel:
+        sim_opt_target = st.selectbox(
+            "最適化の目標",
+            options=[SIM_OPT_TARGET_PROFIT_INC_SPOILAGE, SIM_OPT_TARGET_GROSS_MARGIN, SIM_OPT_TARGET_REVENUE],
+            index=0,
+            key="sim_opt_target_select",
+            label_visibility="collapsed"
+        )
+
+
     from plotly.subplots import make_subplots
     fig_curve = make_subplots(
         rows=2, cols=1, 
@@ -731,6 +1277,16 @@ if selected_tab == "🔍 販売シミュレータ(単体)":
         query_date_col = pd.to_datetime(similar_invs["departure_date"]).dt.date
         similar_invs = similar_invs[(query_date_col >= p_start) & (query_date_col <= p_end)]
         
+        # シーズンフィルタ適用
+        if season_filter != "すべて":
+            similar_invs["month"] = pd.to_datetime(similar_invs["departure_date"]).dt.month
+            if "繁忙期" in season_filter:
+                similar_invs = similar_invs[similar_invs["month"].isin([5, 7, 8])]
+            elif "閑散期" in season_filter:
+                similar_invs = similar_invs[similar_invs["month"].isin([2, 6, 11])]
+            else:
+                similar_invs = similar_invs[~similar_invs["month"].isin([5, 7, 8, 2, 6, 11])]
+        
     past_lines = []
     for _, sim_inv in similar_invs.iterrows():
         sim_events = all_events[all_events["inventory_id"] == sim_inv["id"]].sort_values("booked_at").copy()
@@ -743,8 +1299,8 @@ if selected_tab == "🔍 販売シミュレータ(単体)":
             t_stock = max(1, int(sim_inv.get("total_stock", 1)))
             sim_events["cum_rate"] = sim_events["quantity"].cumsum() / t_stock * 100
             
-            # 日数(-90~0)ごとにフォワードフィルして平均計算用の配列を作成
-            df_daily = pd.DataFrame({"lead_days": range(-90, 1)})
+            # 日数(-120~0)ごとにフォワードフィルして平均計算用の配列を作成
+            df_daily = pd.DataFrame({"lead_days": range(-120, 1)})
             merged = pd.merge(df_daily, sim_events[["lead_days", "cum_rate"]].drop_duplicates("lead_days", keep="last"), on="lead_days", how="left")
             merged["cum_rate"] = merged["cum_rate"].ffill().fillna(0)
             past_lines.append(merged["cum_rate"].values)
@@ -753,13 +1309,64 @@ if selected_tab == "🔍 販売シミュレータ(単体)":
         import numpy as np
         avg_rates = np.mean(past_lines, axis=0)
         fig_curve.add_trace(go.Scatter(
-            x=list(range(-90, 1)), y=avg_rates,
+            x=list(range(-120, 1)), y=avg_rates,
             mode="lines", line=dict(color="rgba(148,163,184,0.8)", width=2, dash="dash"),
-            name="過去実績(平均)",
+            name=f"過去実績({season_filter.split(' ')[0]})",
             legendgroup="actual",
             legendgrouptitle_text="<b>📊 実績</b>",
             hoverinfo="y"
         ), row=1, col=1)
+
+    # シーズンごとの目標ラインを描画
+    from model_evaluator import get_product_classification, get_model_setting
+    from pricing_engine import calculate_inventory_decay_factor
+    target_rate = 1.0
+    c_data = get_product_classification(inv_sel["name"], inv_sel["item_type"])
+    if c_data:
+        if "繁忙期" in season_filter:
+            target_rate = c_data.get("target_rate_peak", 0.95)
+        elif "閑散期" in season_filter:
+            target_rate = c_data.get("target_rate_offpeak", 0.60)
+        elif "中間期" in season_filter:
+            target_rate = c_data.get("target_rate_normal", 0.80)
+        else:
+            # 「すべて」の場合は中間期をベースにする、または選択商品のシーズンに合わせる
+            dep_dt = pd.to_datetime(inv_sel["departure_date"])
+            m = dep_dt.month
+            if m in {5, 7, 8}:
+                target_rate = c_data.get("target_rate_peak", 0.95)
+            elif m in {2, 6, 11}:
+                target_rate = c_data.get("target_rate_offpeak", 0.60)
+            else:
+                target_rate = c_data.get("target_rate_normal", 0.80)
+                
+    # 目標ラインの座標データ生成 (モデル設定があれば曲線を引く)
+    char = c_data["characteristic"] if c_data else "stable"
+    saved_setting = get_model_setting(inv_sel["item_type"], char)
+    
+    if saved_setting and saved_setting.get("strategy") == "demand_forecast":
+        config = saved_setting.get("config", {})
+        k_p = config.get("decay_k", 20.0)
+        p_p = config.get("decay_p", 0.12)
+        pattern_p = config.get("decay_pattern", "standard")
+        
+        target_x = list(range(-120, 1))
+        target_y = []
+        for d in target_x:
+            decay = calculate_inventory_decay_factor(abs(d), 120, k_p, p_p, pattern=pattern_p)
+            target_y.append(target_rate * 100 * (1.0 - decay))
+    else:
+        # ルールベースや未設定の場合は従来通りの直線
+        target_x = [-120, 0]
+        target_y = [0, target_rate * 100]
+
+    fig_curve.add_trace(go.Scatter(
+        x=target_x, y=target_y,
+        mode="lines", line=dict(color=Theme.primary, width=2, dash="dot"),
+        name=f"目標ライン ({season_filter.split(' ')[0]})",
+        legendgroup="actual",
+        hoverinfo="skip"
+    ), row=1, col=1)
 
     # ② 選択された商品の実績（基準日まで）を描画
     item_events_filtered = item_events[item_events["booked_at"].dt.date <= v_today].copy()
@@ -839,10 +1446,10 @@ if selected_tab == "🔍 販売シミュレータ(単体)":
         # --- 直近の実績に合わせた予測ベロシティ(ベースの傾き)の計算 ---
         lookback_days = 30
         
-        # 修正: 90日固定ではなく、販売開始からの実際の期間（最大180日程度など）を考慮するか、
+        # 修正: 120日固定ではなく、販売開始からの実際の期間（最大180日程度など）を考慮するか、
         # 少なくとも分母がゼロ以下にならないように max(1か月の営業日数など, ...) を設定
         # 安全のため、分母は「最低30日」でキャップしておく（異常値防止）
-        denominator_days = max(30, (90 - days_remaining))
+        denominator_days = max(30, (120 - days_remaining))
         overall_v = current_sales / denominator_days
 
         if not item_events_filtered.empty and denominator_days >= lookback_days:
@@ -898,14 +1505,14 @@ if selected_tab == "🔍 販売シミュレータ(単体)":
                 best_block_price = curr_p
                 best_block_profit_score = -1
                 
-                # 候補となる価格倍率 (現在価格を中心に ±30% など)
-                price_multipliers = [0.7, 0.8, 0.9, 0.95, 1.0, 1.05, 1.1, 1.2, 1.3]
+                # 候補となる価格倍率 (定数から読み込み)
+                price_multipliers = SIM_PRICE_MULTIPLIERS
                 
                 for pm in price_multipliers:
                     test_p = int(curr_p * pm)
                     # 異常値防止のための上下限
-                    test_p = max(test_p, int(base_price * 0.4))
-                    test_p = min(test_p, int(base_price * 2.0))
+                    test_p = max(test_p, int(base_price * SIM_PRICE_LOWER_BOUND_RATIO))
+                    test_p = min(test_p, int(base_price * SIM_PRICE_UPPER_BOUND_RATIO))
                     
                     test_s = curr_s
                     test_rev = 0
@@ -933,8 +1540,16 @@ if selected_tab == "🔍 販売シミュレータ(単体)":
                         test_sales_count += actual_test_sales
                         test_rev += actual_test_sales * test_p
                     
-                    # 利益相当スコア (売上 + 期間内販売数 * 原価) を算出。これにより最終評価（売上高 - 廃棄損）とのねじれを解消
-                    test_profit_score = test_rev + (test_sales_count * cost)
+                    # 利益相当スコアを最適化目標に合わせて算出
+                    if sim_opt_target == SIM_OPT_TARGET_PROFIT_INC_SPOILAGE:
+                        # 最終利益 (売上高 - 廃棄ロス) の最大化に相当する式
+                        test_profit_score = test_rev + (test_sales_count * cost)
+                    elif sim_opt_target == SIM_OPT_TARGET_GROSS_MARGIN:
+                        # 販売分の粗利益 (売上高 - 販売分原価) の最大化
+                        test_profit_score = test_rev - (test_sales_count * cost)
+                    else:
+                        # トップライン (売上高) の最大化
+                        test_profit_score = test_rev
                     
                     if test_profit_score > best_block_profit_score:
                         best_block_profit_score = test_profit_score
@@ -946,7 +1561,7 @@ if selected_tab == "🔍 販売シミュレータ(単体)":
             elif compare_mode == "毎日単価を変更 (ダイナミック)":
                 # これまでの毎日変動ロジック
                 if pred_strategy == "現在の価格戦略を継続":
-                    ideal_sales = total_stock_sel * (1 - (d / 90))
+                    ideal_sales = total_stock_sel * (1 - (d / 120))
                     if curr_s > ideal_sales:
                         curr_p = int(min(curr_p * 1.015, base_price * 1.5))
                     else:
@@ -958,7 +1573,7 @@ if selected_tab == "🔍 販売シミュレータ(単体)":
                     markdown_rate_high = 1.0 + (ai_config.get("sim_markdown_high_pct", -5.0) / 100)
                     markdown_rate_low  = 1.0 + (ai_config.get("sim_markdown_low_pct", -2.0) / 100)
 
-                    ideal_sales = total_stock_sel * (1 - (d / 90))
+                    ideal_sales = total_stock_sel * (1 - (d / 120))
                     
                     if d > sprint_days:
                         if curr_s > ideal_sales * 1.1:
@@ -1008,6 +1623,11 @@ if selected_tab == "🔍 販売シミュレータ(単体)":
         spoilage_qty_strategy = max(0, total_stock_sel - projected_sales)
         spoilage_cost_strategy = spoilage_qty_strategy * cost
         net_profit_strategy = projected_revenue_strategy - spoilage_cost_strategy
+        
+        # その他の指標計算 (粗利, 平均単価)
+        sales_cost_strategy = projected_sales * cost
+        gross_margin_strategy = projected_revenue_strategy - sales_cost_strategy
+        average_price_strategy = projected_revenue_strategy / projected_sales if projected_sales > 0 else 0
         
         # 予測販売率推移（動的または固定化）
         fig_curve.add_trace(go.Scatter(
@@ -1074,7 +1694,11 @@ if selected_tab == "🔍 販売シミュレータ(単体)":
         spoilage_cost_baseline = spoilage_qty_baseline * cost
         net_profit_baseline = projected_revenue_baseline - spoilage_cost_baseline
         
-        revenue_lift = net_profit_strategy - net_profit_baseline
+        # ベースライン側のその他の指標計算
+        sales_cost_baseline = projected_sales_baseline * cost
+        gross_margin_baseline = projected_revenue_baseline - sales_cost_baseline
+        average_price_baseline = base_price
+
 
         # ベースラインの販売率予測線（グレー点線）
         fig_curve.add_trace(go.Scatter(
@@ -1092,49 +1716,128 @@ if selected_tab == "🔍 販売シミュレータ(単体)":
             legendgroup="price"
         ), row=2, col=1)
         
-        # 売上インパクトのハイライトパネル（HTMLマトリクス表示）をグラフ上部に表示
-        if revenue_lift > 0:
-           lift_text = f"<span style='color:{Theme.success};'><b>+¥{revenue_lift:,.0f}の増益効果</b></span>"
+        # 売上インパクトのハイライトパネル（HTMLマトリクス表示）とテーブルの動的切り替え
+        if sim_opt_target == SIM_OPT_TARGET_PROFIT_INC_SPOILAGE:
+            revenue_lift = net_profit_strategy - net_profit_baseline
+            if revenue_lift > 0:
+                lift_text = f"<span style='color:{Theme.success};'><b>+¥{revenue_lift:,.0f}の最終増益効果</b></span>"
+            else:
+                lift_text = f"<span style='color:{Theme.danger};'><b>¥{revenue_lift:,.0f}の最終利益リスク</b></span>"
+            
+            table_header = (
+                f'<th style="padding:4px 8px; color:{Theme.primary};">現在(基準日)の残数</th>'
+                f'<th style="padding:4px 8px;">最終販売数</th>'
+                f'<th style="padding:4px 8px;">廃棄ロス (最終残数)</th>'
+                f'<th style="padding:4px 8px;">売上高</th>'
+                f'<th style="padding:4px 8px; color:{Theme.danger};">廃棄損 (原価¥{cost:,})</th>'
+                f'<th style="padding:4px 8px; font-weight:bold; color:{Theme.text_dark};">最終利益評価額</th>'
+            )
+            
+            row_baseline = (
+                f'<td style="padding:6px 8px; color:{Theme.text_dark};">{total_stock_sel - current_sales}</td>'
+                f'<td style="padding:6px 8px;">{projected_sales_baseline} / {total_stock_sel}</td>'
+                f'<td style="padding:6px 8px;">{spoilage_qty_baseline}</td>'
+                f'<td style="padding:6px 8px;">¥{projected_revenue_baseline:,.0f}</td>'
+                f'<td style="padding:6px 8px; color:{Theme.danger};">-¥{spoilage_cost_baseline:,.0f}</td>'
+                f'<td style="padding:6px 8px; font-weight:bold; color:{Theme.text_muted}; font-size:1.1rem;">¥{net_profit_baseline:,.0f}</td>'
+            )
+            
+            row_strategy = (
+                f'<td style="padding:6px 8px; font-weight:bold; color:{Theme.text_dark};">{total_stock_sel - current_sales}</td>'
+                f'<td style="padding:6px 8px; font-weight:bold;">{projected_sales} / {total_stock_sel}</td>'
+                f'<td style="padding:6px 8px; font-weight:bold;">{spoilage_qty_strategy}</td>'
+                f'<td style="padding:6px 8px; font-weight:bold;">¥{projected_revenue_strategy:,.0f}</td>'
+                f'<td style="padding:6px 8px; font-weight:bold; color:{Theme.danger};">-¥{spoilage_cost_strategy:,.0f}</td>'
+                f'<td style="padding:6px 8px; font-weight:bold; color:{Theme.text_dark}; font-size:1.2rem;">¥{net_profit_strategy:,.0f}</td>'
+            )
+            
+        elif sim_opt_target == SIM_OPT_TARGET_GROSS_MARGIN:
+            revenue_lift = gross_margin_strategy - gross_margin_baseline
+            if revenue_lift > 0:
+                lift_text = f"<span style='color:{Theme.success};'><b>+¥{revenue_lift:,.0f}の販売粗利改善</b></span>"
+            else:
+                lift_text = f"<span style='color:{Theme.danger};'><b>¥{revenue_lift:,.0f}の粗利低下リスク</b></span>"
+            
+            table_header = (
+                f'<th style="padding:4px 8px; color:{Theme.primary};">現在(基準日)の残数</th>'
+                f'<th style="padding:4px 8px;">最終販売数</th>'
+                f'<th style="padding:4px 8px;">平均販売単価</th>'
+                f'<th style="padding:4px 8px;">売上高</th>'
+                f'<th style="padding:4px 8px; color:{Theme.danger};">販売分の原価</th>'
+                f'<th style="padding:4px 8px; font-weight:bold; color:{Theme.text_dark};">販売粗利評価額</th>'
+            )
+            
+            row_baseline = (
+                f'<td style="padding:6px 8px; color:{Theme.text_dark};">{total_stock_sel - current_sales}</td>'
+                f'<td style="padding:6px 8px;">{projected_sales_baseline} / {total_stock_sel}</td>'
+                f'<td style="padding:6px 8px;">¥{average_price_baseline:,.0f}</td>'
+                f'<td style="padding:6px 8px;">¥{projected_revenue_baseline:,.0f}</td>'
+                f'<td style="padding:6px 8px; color:{Theme.danger};">-¥{sales_cost_baseline:,.0f}</td>'
+                f'<td style="padding:6px 8px; font-weight:bold; color:{Theme.text_muted}; font-size:1.1rem;">¥{gross_margin_baseline:,.0f}</td>'
+            )
+            
+            row_strategy = (
+                f'<td style="padding:6px 8px; font-weight:bold; color:{Theme.text_dark};">{total_stock_sel - current_sales}</td>'
+                f'<td style="padding:6px 8px; font-weight:bold;">{projected_sales} / {total_stock_sel}</td>'
+                f'<td style="padding:6px 8px; font-weight:bold;">¥{average_price_strategy:,.0f}</td>'
+                f'<td style="padding:6px 8px; font-weight:bold;">¥{projected_revenue_strategy:,.0f}</td>'
+                f'<td style="padding:6px 8px; font-weight:bold; color:{Theme.danger};">-¥{sales_cost_strategy:,.0f}</td>'
+                f'<td style="padding:6px 8px; font-weight:bold; color:{Theme.text_dark}; font-size:1.2rem;">¥{gross_margin_strategy:,.0f}</td>'
+            )
+            
         else:
-           lift_text = f"<span style='color:{Theme.danger};'><b>¥{revenue_lift:,.0f}の減益リスク</b></span>"
-        
-        st.markdown(f"""
-        <div style="background:{Theme.bg_card}; padding:15px; border-radius:8px; border:1px dashed {Theme.primary}; margin-bottom:15px;">
-            <div style="font-size:0.95rem; color:{Theme.text_dark}; margin-bottom:10px; font-weight:bold;">💡 What-If 分析結果明細 (最終着地推計)</div>
-            <table style="width:100%; border-collapse:collapse; font-size:0.85rem; text-align:right;">
-                <tr style="border-bottom:1px solid {Theme.border_light}; color:{Theme.text_muted}; text-align:right;">
-                    <th style="text-align:left; padding:6px;">シナリオ / 更新頻度</th>
-                    <th style="padding:6px; color:{Theme.primary};">現在(基準日)の残数</th>
-                    <th style="padding:6px;">最終販売数</th>
-                    <th style="padding:6px;">廃棄ロス (最終残数)</th>
-                    <th style="padding:6px;">売上高</th>
-                    <th style="padding:6px; color:{Theme.danger};">廃棄損 (原価¥{cost:,})</th>
-                    <th style="padding:6px; font-weight:bold; color:{Theme.text_dark};">最終利益評価額</th>
-                </tr>
-                <tr style="border-bottom:1px solid {Theme.border_light};">
-                    <td style="text-align:left; padding:8px; color:{Theme.text_muted};">全期間 定価維持 (ベースライン)</td>
-                    <td style="padding:8px; color:{Theme.text_dark};">{total_stock_sel - current_sales}</td>
-                    <td style="padding:8px;">{projected_sales_baseline} / {total_stock_sel}</td>
-                    <td style="padding:8px;">{spoilage_qty_baseline}</td>
-                    <td style="padding:8px;">¥{projected_revenue_baseline:,.0f}</td>
-                    <td style="padding:8px; color:{Theme.danger};">-¥{spoilage_cost_baseline:,.0f}</td>
-                    <td style="padding:8px; font-weight:bold; color:{Theme.text_muted}; font-size:1rem;">¥{net_profit_baseline:,.0f}</td>
-                </tr>
-                <tr style="background:#f4f6f8;">
-                    <td style="text-align:left; padding:8px; font-weight:bold; color:{Theme.primary};">戦略適用 ({compare_mode})</td>
-                    <td style="padding:8px; font-weight:bold; color:{Theme.text_dark};">{total_stock_sel - current_sales}</td>
-                    <td style="padding:8px; font-weight:bold;">{projected_sales} / {total_stock_sel}</td>
-                    <td style="padding:8px; font-weight:bold;">{spoilage_qty_strategy}</td>
-                    <td style="padding:8px; font-weight:bold;">¥{projected_revenue_strategy:,.0f}</td>
-                    <td style="padding:8px; font-weight:bold; color:{Theme.danger};">-¥{spoilage_cost_strategy:,.0f}</td>
-                    <td style="padding:8px; font-weight:bold; color:{Theme.text_dark}; font-size:1.1rem;">¥{net_profit_strategy:,.0f}</td>
-                </tr>
-            </table>
-            <div style="text-align:right; margin-top:12px; font-size:1.1rem; font-weight:bold;">
-                ベースライン比 効果: {lift_text}
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
+            revenue_lift = projected_revenue_strategy - projected_revenue_baseline
+            if revenue_lift > 0:
+                lift_text = f"<span style='color:{Theme.success};'><b>+¥{revenue_lift:,.0f}の売上増効果</b></span>"
+            else:
+                lift_text = f"<span style='color:{Theme.danger};'><b>¥{revenue_lift:,.0f}の売上減リスク</b></span>"
+            
+            table_header = (
+                f'<th style="padding:4px 8px; color:{Theme.primary};">現在(基準日)の残数</th>'
+                f'<th style="padding:4px 8px;">最終販売数 (消化率)</th>'
+                f'<th style="padding:4px 8px;">平均販売単価</th>'
+                f'<th style="padding:4px 8px; font-weight:bold; color:{Theme.text_dark};">総売上高予測</th>'
+            )
+            
+            row_baseline = (
+                f'<td style="padding:6px 8px; color:{Theme.text_dark};">{total_stock_sel - current_sales}</td>'
+                f'<td style="padding:6px 8px;">{projected_sales_baseline} ({projected_sales_rate_baseline:.1f}%)</td>'
+                f'<td style="padding:6px 8px;">¥{average_price_baseline:,.0f}</td>'
+                f'<td style="padding:6px 8px; font-weight:bold; color:{Theme.text_muted}; font-size:1.1rem;">¥{projected_revenue_baseline:,.0f}</td>'
+            )
+            
+            row_strategy = (
+                f'<td style="padding:6px 8px; font-weight:bold; color:{Theme.text_dark};">{total_stock_sel - current_sales}</td>'
+                f'<td style="padding:6px 8px; font-weight:bold;">{projected_sales} ({projected_sales_rate:.1f}%)</td>'
+                f'<td style="padding:6px 8px; font-weight:bold;">¥{average_price_strategy:,.0f}</td>'
+                f'<td style="padding:6px 8px; font-weight:bold; color:{Theme.text_dark}; font-size:1.2rem;">¥{projected_revenue_strategy:,.0f}</td>'
+            )
+
+        html_content = (
+            f'<div style="background:{Theme.bg_card}; padding:12px 15px; border-radius:8px; border:1px dashed {Theme.primary}; margin-bottom:15px; display:flex; align-items:center; justify-content:space-between; gap:20px; margin-top: 5px;">'
+            f'<div style="flex-grow:1; display:flex; flex-direction:column;">'
+            f'<table style="width:100%; border-collapse:collapse; font-size:0.95rem; text-align:right;">'
+            f'<tr style="border-bottom:1px solid {Theme.border_light}; color:{Theme.text_muted}; text-align:right;">'
+            f'<th style="text-align:left; padding:4px 8px;">シナリオ / 更新頻度</th>'
+            f'{table_header}'
+            f'</tr>'
+            f'<tr style="border-bottom:1px solid {Theme.border_light};">'
+            f'<td style="text-align:left; padding:6px 8px; color:{Theme.text_muted};">全期間 定価維持 (ベースライン)</td>'
+            f'{row_baseline}'
+            f'</tr>'
+            f'<tr style="background:#f4f6f8;">'
+            f'<td style="text-align:left; padding:6px 8px; font-weight:bold; color:{Theme.primary};">戦略適用 ({compare_mode})</td>'
+            f'{row_strategy}'
+            f'</tr>'
+            f'</table>'
+            f'</div>'
+            f'<div style="min-width:240px; text-align:center; padding-left:20px; border-left:2px solid {Theme.border_light}; display:flex; flex-direction:column; justify-content:center;">'
+            f'<div style="font-size:1.0rem; color:{Theme.text_muted}; margin-bottom:4px; font-weight:bold;">ベースライン比 効果</div>'
+            f'<div style="font-size:1.35rem; font-weight:bold;">{lift_text}</div>'
+            f'</div>'
+            f'</div>'
+        )
+        st.markdown(html_content, unsafe_allow_html=True)
 
     # === 最大単価の計算 (Y軸上限用) ===
     overall_max_price = base_price if 'base_price' in locals() else 10000
@@ -1149,7 +1852,7 @@ if selected_tab == "🔍 販売シミュレータ(単体)":
     
     # 累計販売率（上段: row=1）
     fig_curve.update_xaxes(
-        range=[-90, 5], 
+        range=[-120, 5], 
         tickfont=dict(color="black"),
         row=1, col=1
     )
@@ -1164,7 +1867,7 @@ if selected_tab == "🔍 販売シミュレータ(単体)":
     # 販売単価（下段: row=2）
     fig_curve.update_xaxes(
         title_text="残り日数 (出発日まで)", 
-        range=[-90, 5], 
+        range=[-120, 5], 
         title_font=dict(color="black", size=15, weight="bold"),
         tickfont=dict(color="black", size=13),
         row=2, col=1
@@ -2357,9 +3060,22 @@ elif selected_tab == "🔬 販売モデル設定":
         if c_data:
             char = c_data["characteristic"]
             src = c_data["source"]
+            t_normal = c_data.get("target_rate_normal")
+            t_peak = c_data.get("target_rate_peak")
+            t_offpeak = c_data.get("target_rate_offpeak")
+            
+            if t_normal is None:
+                t_normal = min(1.0, final_sales_rate / 100.0) if final_sales_rate > 0 else 0.80
+            if t_peak is None:
+                t_peak = min(1.0, t_normal * (95.0 / 80.0))
+            if t_offpeak is None:
+                t_offpeak = min(1.0, t_normal * (60.0 / 80.0))
         else:
             char = "stable" # デフォルト
             src = "未設定"
+            t_normal = min(1.0, final_sales_rate / 100.0) if final_sales_rate > 0 else 0.80
+            t_peak = min(1.0, t_normal * (95.0 / 80.0))
+            t_offpeak = min(1.0, t_normal * (60.0 / 80.0))
             
         # 登録モデル名の取得 (設定元の代わりに表示)
         saved_setting = get_model_setting(it_type, char)
@@ -2380,6 +3096,9 @@ elif selected_tab == "🔬 販売モデル設定":
             "モデルカテゴリ": char_label,
             "モデル種別": model_name,
             "最終販売率": f"{final_sales_rate:.1f}%",
+            "繁忙期目標": t_peak,
+            "中間期目標": t_normal,
+            "閑散期目標": t_offpeak,
             "_raw_type": it_type,
             "_raw_char": char
         })
@@ -2391,7 +3110,7 @@ elif selected_tab == "🔬 販売モデル設定":
         cls_df,
         use_container_width=True,
         hide_index=True,
-        column_order=["商品種別", "商品名", "モデルカテゴリ", "モデル種別", "最終販売率"],
+        column_order=["商品種別", "商品名", "モデルカテゴリ", "モデル種別", "最終販売率", "繁忙期目標", "中間期目標", "閑散期目標"],
         column_config={
             "商品種別": st.column_config.TextColumn("商品種別", disabled=True),
             "商品名": st.column_config.TextColumn("商品名", disabled=True),
@@ -2403,6 +3122,9 @@ elif selected_tab == "🔬 販売モデル設定":
             ),
             "モデル種別": st.column_config.TextColumn("モデル種別", disabled=True),
             "最終販売率": st.column_config.TextColumn("過去の最終販売率", disabled=True),
+            "繁忙期目標": st.column_config.NumberColumn("繁忙期目標", format="%.2f", min_value=0.0, max_value=2.0, step=0.05),
+            "中間期目標": st.column_config.NumberColumn("中間期目標", format="%.2f", min_value=0.0, max_value=2.0, step=0.05),
+            "閑散期目標": st.column_config.NumberColumn("閑散期目標", format="%.2f", min_value=0.0, max_value=2.0, step=0.05),
         }
     )
 
@@ -2419,10 +3141,17 @@ elif selected_tab == "🔬 販売モデル設定":
                 new_char_label = row["モデルカテゴリ"]
                 new_char = char_unmap.get(new_char_label, "stable")
                 
-                # 古い値（_raw_char）から変わっている場合のみ更新
-                if new_char != row["_raw_char"]:
-                    save_product_classification(p_name, it_type, new_char, "manual")
-                    count += 1
+                new_peak = row["繁忙期目標"]
+                new_normal = row["中間期目標"]
+                new_offpeak = row["閑散期目標"]
+                
+                # 常に保存関数を呼ぶ（特性または目標率が変更された可能性があるため）
+                save_product_classification(
+                    p_name, it_type, new_char, 
+                    target_rate_peak=new_peak, target_rate_normal=new_normal, target_rate_offpeak=new_offpeak, 
+                    source="manual"
+                )
+                count += 1
         st.success(f"{count}件の分類を保存しました！バックテストを実行するには下のシナリオ設定へお進みください。")
         import time
         time.sleep(1)
@@ -2505,26 +3234,83 @@ elif selected_tab == "🔬 販売モデル設定":
     # 共通設定に目標販売率を反映
     ai_config["target_sell_rate"] = global_target_sr
 
+    if "saved_adv_config" not in st.session_state:
+        st.session_state["saved_adv_config"] = {
+            "inv_p": float(ai_config["inv_threshold_premium"]),
+            "inv_h": float(ai_config["inv_threshold_high"]),
+            "time_l": int(ai_config["time_threshold_last_min"]),
+            "pop_t": float(CLASS_POPULAR_THRESHOLD),
+            "niche_d": int(CLASS_NICHE_DAYS),
+            "niche_r": float(CLASS_NICHE_RATIO),
+            "gr_120_60": (80, 120),
+            "gr_59_30": (85, 130),
+            "gr_29_14": (90, 150),
+            "gr_13_4": (70, 150),
+            "gr_3_0": (50, 200)
+        }
+    adv_cfg = st.session_state["saved_adv_config"]
+
     with st.expander("⚙️ アルゴリズム・分類・スコアの詳細設定", expanded=False):
         c1, c2 = st.columns(2)
         with c1:
             st.markdown("**📏 在庫・時期の判定しきい値**")
-            inv_p = st.number_input("希少プレミアム在庫率", 0.0, 1.0, float(ai_config["inv_threshold_premium"]), 0.05)
-            inv_h = st.number_input("需要増加調整在庫率", 0.0, 1.0, float(ai_config["inv_threshold_high"]), 0.05)
-            time_l = st.number_input("直前割引開始日", 0, 90, int(ai_config["time_threshold_last_min"]))
+            inv_p = st.number_input("希少プレミアム在庫率", 0.0, 1.0, adv_cfg["inv_p"], 0.05)
+            inv_h = st.number_input("需要増加調整在庫率", 0.0, 1.0, adv_cfg["inv_h"], 0.05)
+            time_l = st.number_input("直前割引開始日", 0, 90, adv_cfg["time_l"])
+            adv_cfg.update({"inv_p": inv_p, "inv_h": inv_h, "time_l": time_l})
             ai_config["inv_threshold_premium"] = inv_p
             ai_config["inv_threshold_high"] = inv_h
             ai_config["time_threshold_last_min"] = time_l
             
         with c2:
             st.markdown("**🏷️ 商品分類の自動判定基準**")
-            pop_t = st.number_input("大人気判定(販売率)", 0.0, 1.0, float(CLASS_POPULAR_THRESHOLD), 0.05)
-            niche_d = st.number_input("ニッチ判定(直前期日数)", 1, 90, int(CLASS_NICHE_DAYS))
-            niche_r = st.number_input("ニッチ判定(直前期売上比)", 0.0, 1.0, float(CLASS_NICHE_RATIO), 0.05)
+            pop_t = st.number_input("大人気判定(販売率)", 0.0, 1.0, adv_cfg["pop_t"], 0.05)
+            niche_d = st.number_input("ニッチ判定(直前期日数)", 1, 90, adv_cfg["niche_d"])
+            niche_r = st.number_input("ニッチ判定(直前期売上比)", 0.0, 1.0, adv_cfg["niche_r"], 0.05)
+            adv_cfg.update({"pop_t": pop_t, "niche_d": niche_d, "niche_r": niche_r})
             # これらはグローバル定数のため、再計算時に参照されるようにai_configへも入れる
             ai_config["class_popular_threshold"] = pop_t
             ai_config["class_niche_days"] = niche_d
             ai_config["class_niche_ratio"] = niche_r
+
+    with st.expander("🛡️ 期間別 価格上限・下限（ガードレール）設定", expanded=True):
+        st.write("各リードタイム期間において、AIが提示できる価格の変動幅（定価に対する％）を制限します。")
+        
+        g_c1, g_c2, g_c3, g_c4, g_c5 = st.columns(5)
+        
+        with g_c1:
+            st.markdown("**120〜60日前**\n\n(早期)")
+            gr_120_60 = st.slider("Min-Max (%)", 30, 300, adv_cfg["gr_120_60"], 5, key="gr_120_60_slider", label_visibility="collapsed")
+            st.caption(f"Min: {gr_120_60[0]}% - Max: {gr_120_60[1]}%")
+        with g_c2:
+            st.markdown("**59〜30日前**\n\n(中間)")
+            gr_59_30 = st.slider("Min-Max (%)", 30, 300, adv_cfg["gr_59_30"], 5, key="gr_59_30_slider", label_visibility="collapsed")
+            st.caption(f"Min: {gr_59_30[0]}% - Max: {gr_59_30[1]}%")
+        with g_c3:
+            st.markdown("**29〜14日前**\n\n(やや直前)")
+            gr_29_14 = st.slider("Min-Max (%)", 30, 300, adv_cfg["gr_29_14"], 5, key="gr_29_14_slider", label_visibility="collapsed")
+            st.caption(f"Min: {gr_29_14[0]}% - Max: {gr_29_14[1]}%")
+        with g_c4:
+            st.markdown("**13〜4日前**\n\n(直前)")
+            gr_13_4 = st.slider("Min-Max (%)", 30, 300, adv_cfg["gr_13_4"], 5, key="gr_13_4_slider", label_visibility="collapsed")
+            st.caption(f"Min: {gr_13_4[0]}% - Max: {gr_13_4[1]}%")
+        with g_c5:
+            st.markdown("**3〜0日前**\n\n(超直前)")
+            gr_3_0 = st.slider("Min-Max (%)", 30, 300, adv_cfg["gr_3_0"], 5, key="gr_3_0_slider", label_visibility="collapsed")
+            st.caption(f"Min: {gr_3_0[0]}% - Max: {gr_3_0[1]}%")
+            
+        adv_cfg.update({
+            "gr_120_60": gr_120_60, "gr_59_30": gr_59_30, "gr_29_14": gr_29_14,
+            "gr_13_4": gr_13_4, "gr_3_0": gr_3_0
+        })
+            
+        ai_config["guardrails"] = {
+            "120_60": {"min": gr_120_60[0], "max": gr_120_60[1]},
+            "59_30": {"min": gr_59_30[0], "max": gr_59_30[1]},
+            "29_14": {"min": gr_29_14[0], "max": gr_29_14[1]},
+            "13_4": {"min": gr_13_4[0], "max": gr_13_4[1]},
+            "3_0": {"min": gr_3_0[0], "max": gr_3_0[1]}
+        }
 
     if "eval_scenarios" not in st.session_state:
         # 深いコピーを使用して各シナリオの設定を完全に独立させる
@@ -2621,6 +3407,7 @@ elif selected_tab == "🔬 販売モデル設定":
             evals = []
             sum_pred_rates = None
             sum_act_rates = None
+            sum_sim_rates = None
             all_lead_days = None
             cnt = 0
             
@@ -2634,17 +3421,20 @@ elif selected_tab == "🔬 販売モデル設定":
                 
                 p_r = np.array(res.get("predicted_rates", []))
                 a_r = np.array(res.get("actual_rates", []))
+                s_r = np.array(res.get("simulated_rates", []))
                 l_d = np.array(res.get("lead_days", []))
                 
                 if len(l_d) > 0:
                     if sum_pred_rates is None:
                         sum_pred_rates = p_r.copy()
                         sum_act_rates = a_r.copy()
+                        sum_sim_rates = s_r.copy()
                         all_lead_days = l_d.copy()
                     else:
                         m_len = min(len(sum_pred_rates), len(p_r))
                         sum_pred_rates[:m_len] += p_r[:m_len]
                         sum_act_rates[:m_len] += a_r[:m_len]
+                        sum_sim_rates[:m_len] += s_r[:m_len]
                     cnt += 1
             
             # スコア平均と安定性(Robustness)の計算
@@ -2676,33 +3466,71 @@ elif selected_tab == "🔬 販売モデル設定":
                 "lift": avg_lift, "spoilage": avg_spoil, "score": avg_comp,
                 "avg_pred": (sum_pred_rates / cnt) if cnt > 0 else None,
                 "avg_act": (sum_act_rates / cnt) if cnt > 0 else None,
+                "avg_sim": (sum_sim_rates / cnt) if cnt > 0 else None,
                 "lead_days": all_lead_days
             })
         return results
 
     st.markdown("---")
+    st.markdown("### 📅 学習・評価対象データの抽出期間設定")
+    st.write("AIに学習（またはテスト）させる過去実績の範囲を選択します。指定した期間内に出発した商品のみが評価対象となります。")
+    
+    if not bt_inv_df.empty:
+        min_d = pd.to_datetime(bt_inv_df["departure_date"]).min().date()
+        max_d = pd.to_datetime(bt_inv_df["departure_date"]).max().date()
+    else:
+        min_d, max_d = date.today(), date.today()
+        
+    d_col1, d_col2 = st.columns(2)
+    train_start = d_col1.date_input("抽出開始日 (出発日)", value=min_d)
+    train_end = d_col2.date_input("抽出終了日 (出発日)", value=max_d)
+    
+    season_opt = st.selectbox("シーズン絞り込み (抽出対象のさらに絞り込み)", 
+        ["中間期のみ（推奨・高速）", "全シーズン", "繁忙期のみ", "閑散期のみ"],
+        help="最適化を高速化するため、特異な月を除外して学習させることができます。"
+    )
+    
+    st.markdown("---")
+    
+    # === バックテスト／最適化の実行ボタンと処理 ===
+    
+    # 選択したカテゴリと期間に合致する実績データを事前抽出
+    cat_products = edited_cls_df[(edited_cls_df["商品種別"] == t_item_display) & (edited_cls_df["モデルカテゴリ"] == t_char_display)]
+    base_mask = bt_inv_df["name"].isin(cat_products["商品名"]) & (bt_inv_df["item_type"] == t_item)
+    date_mask = (pd.to_datetime(bt_inv_df["departure_date"]).dt.date >= train_start) & (pd.to_datetime(bt_inv_df["departure_date"]).dt.date <= train_end)
+    
+    # シーズンフィルタの適用
+    dep_months = pd.to_datetime(bt_inv_df["departure_date"]).dt.month
+    if season_opt == "中間期のみ（推奨・高速）":
+        season_mask = ~dep_months.isin([5, 7, 8, 2, 6, 11])
+    elif season_opt == "繁忙期のみ":
+        season_mask = dep_months.isin([5, 7, 8])
+    elif season_opt == "閑散期のみ":
+        season_mask = dep_months.isin([2, 6, 11])
+    else:
+        season_mask = pd.Series(True, index=bt_inv_df.index)
+        
+    filtered_target_ids = bt_inv_df[base_mask & date_mask & season_mask]["id"].tolist()
+    
+    st.markdown("---")
+    dev_mode = st.checkbox("🧪 開発・検証用モード (超高速・簡易テスト)", value=False, help="最適化の探索回数とサンプルデータ数を極小化し、数秒でテストを完了させます（シミュレーション期間は120日のままです）")
     
     b_col1, b_col2 = st.columns(2)
+    
     if b_col1.button("▶ 全シナリオのバックテストを実行", type="primary", use_container_width=True):
         with st.spinner("各シナリオのシミュレーション中..."):
-            cat_products = edited_cls_df[(edited_cls_df["商品種別"] == t_item_display) & (edited_cls_df["モデルカテゴリ"] == t_char_display)]
-            target_ids = bt_inv_df[bt_inv_df["name"].isin(cat_products["商品名"]) & (bt_inv_df["item_type"] == t_item)]["id"].tolist()
-            
-            if not target_ids:
-                st.warning("このカテゴリに属する商品実績がありません。")
+            if not filtered_target_ids:
+                st.warning("指定期間内に、このカテゴリに属する商品実績がありません。")
             else:
                 # 重み付け設定を全シナリオに適用
                 for sc in scenarios:
                     sc["config"].update(score_weights)
-                st.session_state["backtest_results"] = run_backtest_scenarios(scenarios, target_ids, bt_inv_df, bt_events_df)
-                st.success("全てのシナリオのシミュレーションが完了しました。")
+                st.session_state["backtest_results"] = run_backtest_scenarios(scenarios, filtered_target_ids, bt_inv_df, bt_events_df)
+                st.success(f"期間内の {len(filtered_target_ids)} 件の商品実績に基づくシミュレーションが完了しました。")
 
     if b_col2.button("🚀 パラメータの自動最適化 (Auto-tune)", type="secondary", use_container_width=True, help="各シナリオの設定をHill Climbing法で自動調整し、最も実績に近い設定を探します。"):
-        cat_products = edited_cls_df[(edited_cls_df["商品種別"] == t_item_display) & (edited_cls_df["モデルカテゴリ"] == t_char_display)]
-        target_ids = bt_inv_df[bt_inv_df["name"].isin(cat_products["商品名"]) & (bt_inv_df["item_type"] == t_item)]["id"].tolist()
-        
-        if not target_ids:
-            st.warning("このカテゴリに属する商品実績がありません。")
+        if not filtered_target_ids:
+            st.warning("指定期間内に、このカテゴリに属する商品実績がありません。")
         else:
             p_bar = st.progress(0)
             status_text = st.empty()
@@ -2711,223 +3539,110 @@ elif selected_tab == "🔬 販売モデル設定":
             debug_expander = st.expander("🛠️ 最適化プロセス・ログ (デバッグ用)", expanded=True)
             log_container = debug_expander.container()
             
-            all_trials = []
+            import optuna
+            optuna.logging.set_verbosity(optuna.logging.WARNING)
             
-            # --- Round 0: 広域スクリーニング (砂まきフェーズ v3) ---
-            num_sand_sowing = 150
-            log_container.write(f"**[Round 0] 広域スクリーニング開始 ({num_sand_sowing}パターン)**")
+            # --- 代表データの抽出 (固定 Validation Set) ---
+            val_sample_size = min(3 if dev_mode else 30, len(filtered_target_ids))
             
-            base_patterns = ["standard", "linear", "concave", "convex", "sigmoid", "early_rush", "last_minute_rush", "bimodal"]
-            candidates = []
+            # 均等抽出 (ソート済みの傾向がある前提で、全体から満遍なく取る)
+            if val_sample_size < len(filtered_target_ids):
+                step = len(filtered_target_ids) / val_sample_size
+                val_target_ids = [filtered_target_ids[int(i * step)] for i in range(val_sample_size)]
+            else:
+                val_target_ids = filtered_target_ids
+
+            log_container.write(f"**[Phase 1] Optunaによる探索開始** (代表抽出した {val_sample_size} 件のデータで評価を固定)")
             
-            # 定番パターンの全網羅
-            for bp in base_patterns:
-                for strat in ["rule_based", "demand_forecast"]:
-                    cand = {"name": f"Base_{strat}_{bp}", "strategy": strat, "config": copy.deepcopy(ai_config)}
-                    cand["config"]["decay_pattern"] = bp
-                    cand["config"].update(score_weights) # 重みを適用
-                    candidates.append(cand)
-            
-            # 残りを広域ランダムで埋める
-            for i in range(num_sand_sowing - len(candidates)):
-                strategy = random.choice(["rule_based", "demand_forecast"])
+            def objective(trial):
+                strategy = trial.suggest_categorical("strategy", ["rule_based", "demand_forecast"])
+                
                 config = copy.deepcopy(ai_config)
-                config["decay_pattern"] = random.choice(base_patterns)
-                config["decay_k"] = random.uniform(5.0, 80.0)
-                config["decay_p"] = random.uniform(0.01, 0.99)
-                config["demand_multiplier"] = random.uniform(0.1, 8.0)
-                config["elasticity"] = random.uniform(0.1, 4.0)
-                config.update(score_weights) # 重みを適用
+                # 環境変数(ズル防止): シミュレータの前提を変えるパラメータは探索対象外にし、固定する
+                config["demand_multiplier"] = 1.0
+                if "elasticity" in config:
+                    del config["elasticity"] # マスタ定義の弾力性を使用させる
                 
-                if strategy == "rule_based":
-                    config["peak_markup"] = random.uniform(1.0, 2.0)
-                    config["last_minute_discount"] = random.uniform(0.2, 1.0)
-                    config["rare_premium"] = random.uniform(1.0, 3.0)
-                    config["abundant_discount"] = random.uniform(0.3, 1.0)
-                
-                candidates.append({"name": f"Rand_{i}", "strategy": strategy, "config": config})
-            
-            for i, cand in enumerate(candidates):
-                status_text.text(f"スクリーニング中: {cand['name']} ({i+1}/{num_sand_sowing})")
-                cand["id"] = "Temp"
-                cand["config"]["target_sell_rate"] = global_target_sr
-                res = run_backtest_scenarios([cand], target_ids, bt_inv_df, bt_events_df)[0]
-                all_trials.append(res)
-            
-            # 初期選定 (スコア順)
-            all_trials.sort(key=lambda x: x["score"], reverse=True)
-            seeds = all_trials[:2]
-            
-            best_score_mape = seeds[0]["mape"]
-            log_container.write(f"Round 0 完了. Best Score: {seeds[0]['score']:.1f} (MAPE: {best_score_mape:.2f}%)")
+                config["target_sell_rate"] = global_target_sr
+                config.update(score_weights)
 
-            def mutate_config_v3(cfg, strategy, intensity=1.0):
-                new_cfg = copy.deepcopy(cfg)
-                # マルチポイント変異 (同時に1〜3個のパラメータを動かす)
-                num_mutations = random.randint(1, 3)
-                for _ in range(num_mutations):
-                    r = random.random()
-                    if strategy == "rule_based":
-                        if r < 0.25:
-                            new_cfg["peak_markup"] = max(1.0, min(2.5, new_cfg.get("peak_markup", 1.15) + random.uniform(-0.25, 0.25) * intensity))
-                        elif r < 0.50:
-                            new_cfg["last_minute_discount"] = max(0.2, min(1.0, new_cfg.get("last_minute_discount", 0.8) + random.uniform(-0.2, 0.2) * intensity))
-                        elif r < 0.75:
-                            new_cfg["rare_premium"] = max(1.0, min(3.5, new_cfg.get("rare_premium", 1.4) + random.uniform(-0.4, 0.4) * intensity))
-                        else:
-                            new_cfg["abundant_discount"] = max(0.3, min(1.0, new_cfg.get("abundant_discount", 0.9) + random.uniform(-0.2, 0.2) * intensity))
-                    else:
-                        if r < 0.10: 
-                            new_cfg["decay_pattern"] = random.choice(base_patterns)
-                        elif r < 0.40: 
-                            new_cfg["decay_k"] = max(5.0, min(150.0, new_cfg.get("decay_k", 20.0) + random.uniform(-30, 30) * intensity))
-                        elif r < 0.70: 
-                            new_cfg["decay_p"] = max(0.01, min(0.99, new_cfg.get("decay_p", 0.12) + random.uniform(-0.3, 0.3) * intensity))
-                        else: 
-                            new_cfg["demand_multiplier"] = max(0.01, min(15.0, new_cfg.get("demand_multiplier", 1.0) + random.uniform(-1.5, 1.5) * intensity))
+                if strategy == "demand_forecast":
+                    base_patterns = ["standard", "linear", "concave", "convex", "sigmoid", "early_rush", "last_minute_rush", "bimodal"]
+                    config["decay_pattern"] = trial.suggest_categorical("decay_pattern", base_patterns)
+                    # k, pは特定のパターンの時だけ意味を持つが、Optuna上は一応探索させる
+                    config["decay_k"] = trial.suggest_float("decay_k", 5.0, 150.0)
+                    config["decay_p"] = trial.suggest_float("decay_p", 0.01, 0.99)
+                elif strategy == "rule_based":
+                    config["peak_markup"] = trial.suggest_float("peak_markup", 1.0, 2.5)
+                    config["last_minute_discount"] = trial.suggest_float("last_minute_discount", 0.2, 1.0)
+                    config["rare_premium"] = trial.suggest_float("rare_premium", 1.0, 3.5)
+                    config["abundant_discount"] = trial.suggest_float("abundant_discount", 0.3, 1.0)
+                
+                cand = {"id": "Temp", "name": f"Trial_{trial.number}", "strategy": strategy, "config": config}
+                
+                # val_target_ids (固定された30件) だけで評価する
+                res = run_backtest_scenarios([cand], val_target_ids, bt_inv_df, bt_events_df)[0]
+                
+                # 進捗の表示
+                try:
+                    best_val = trial.study.best_value
+                except ValueError: # 初回はbestが無い
+                    best_val = res["score"]
                     
-                    if random.random() < 0.3:
-                        new_cfg["elasticity"] = max(0.05, min(5.0, new_cfg.get("elasticity", 1.5) + random.uniform(-0.5, 0.5) * intensity))
+                status_text.text(f"最適化中... Trial {trial.number+1}/{3 if dev_mode else 50} (Best Score: {best_val:.1f})")
+                total_trials_prog = 3.5 if dev_mode else 55.0
+                p_bar.progress((trial.number + 1) / total_trials_prog) # 全体の約90%を探索プロセスとする
                 
-                new_cfg["target_sell_rate"] = global_target_sr
-                return new_cfg
+                # Trialに名前やConfigを保存しておく（後で取り出すため）
+                trial.set_user_attr("cand_info", cand)
+                return res["score"]
 
-            def crossover_configs(p1, p2):
-                # 遺伝子交叉: 二つの親からランダムにキーを引き継ぐ
-                child_cfg = copy.deepcopy(p1["config"])
-                p2_cfg = p2["config"]
-                for key in ["decay_pattern", "decay_k", "decay_p", "demand_multiplier", "elasticity", "peak_markup", "last_minute_discount", "rare_premium", "abundant_discount"]:
-                    if key in p2_cfg and random.random() < 0.5:
-                        child_cfg[key] = p2_cfg[key]
-                return child_cfg
-
-            # --- Round 1-10: 反復最適化 / Genetic Evolution ---
-            max_rounds = 10
-            for round_idx in range(1, max_rounds + 1):
-                round_population = []
-                status_text.text(f"最適化ラウンド {round_idx}/{max_rounds} (進化中)...")
-                p_bar.progress(round_idx / max_rounds)
-                
-                # 1. 交叉個体の生成
-                if len(seeds) >= 2:
-                    for c_idx in range(6):
-                        crossed = {
-                            "id": "Temp", "name": f"Cross{round_idx}_{c_idx}",
-                            "strategy": random.choice([seeds[0]["strategy"], seeds[1]["strategy"]]),
-                            "config": crossover_configs(seeds[0], seeds[1])
-                        }
-                        round_population.append(crossed)
-                
-                # 2. 変異個体の生成
-                for s_idx, seed in enumerate(seeds):
-                    for m_idx in range(12):
-                        mutated = {
-                            "id": "Temp", "name": f"Mut{round_idx}_{s_idx}_{m_idx}", 
-                            "strategy": seed["strategy"], 
-                            "config": mutate_config_v3(seed["config"], seed["strategy"], intensity=(1.2 - round_idx/10.0))
-                        }
-                        round_population.append(mutated)
-                
-                # 一括実行
-                results = run_backtest_scenarios(round_population, target_ids, bt_inv_df, bt_events_df)
-                all_trials.extend(results)
-                
-                # 選定: 多様性を維持しつつ上位2つを次世代の親に
-                all_trials.sort(key=lambda x: x["score"], reverse=True)
-                
-                new_seeds = [all_trials[0]]
-                # 2つ目の親は、違うアルゴリズムか、違うパターンを優先
-                for t in all_trials[1:100]:
-                    is_diff = (t["strategy"] != new_seeds[0]["strategy"]) or \
-                              (t["config"].get("decay_pattern") != new_seeds[0]["config"].get("decay_pattern"))
-                    if is_diff:
-                        new_seeds.append(t)
-                        break
-                if len(new_seeds) < 2:
-                    new_seeds.append(all_trials[1])
-                seeds = new_seeds
-                
-                best_t = max(all_trials, key=lambda x: x["score"])
-                log_container.write(f"Round {round_idx}: Best Score={best_t['score']:.1f} (MAPE: {best_t['mape']:.2f}%) (Genetics Action: Crossover & Multi-Mutation)")
-                
-                # 成功条件 (総合スコアの改善が飽和したら終了)
-                if round_idx > 3 and abs(all_trials[0]["score"] - all_trials[10]["score"]) < 0.5:
-                    log_container.write(f"✅ 進化が収束したため、早期終了します。")
-                    break
-
-            # 最終選出 (多様性フィルタを適用)
-            all_trials.sort(key=lambda x: x["score"], reverse=True)
-            diverse_final = []
-            for t in all_trials:
-                is_duplicate = False
-                for df in diverse_final:
-                    # 指標がほぼ同じものは同一とみなす
-                    if abs(t["mape"] - df["mape"]) < 0.1 and abs(t["score"] - df["score"]) < 0.1:
-                        is_duplicate = True
-                        break
-                if not is_duplicate:
-                    diverse_final.append(t)
-                if len(diverse_final) >= 5:
-                    break
+            # ベイズ最適化の実行
+            study = optuna.create_study(direction="maximize")
+            study.optimize(objective, n_trials=3 if dev_mode else 50)
             
-            final_5 = diverse_final
-
-            # --- Round 11: 最終微調整 (Fine-Tuning) ---
-            log_container.write(f"**[Round 11] 最終微調整 (Fine-Tuning) 開始**")
-            status_text.text("最終微調整フェーズを実行中...")
+            log_container.write(f"✅ {3 if dev_mode else 50}回の探索完了. ベストスコア: {study.best_value:.1f}")
             
-            def mutate_config_micro(cfg, strategy):
-                """微小な局所探索: パターンの変更はせず、数%のブレンドのみ行う"""
-                new_cfg = copy.deepcopy(cfg)
-                if strategy == "rule_based":
-                    if "peak_markup" in new_cfg: new_cfg["peak_markup"] *= random.uniform(0.98, 1.02)
-                    if "last_minute_discount" in new_cfg: new_cfg["last_minute_discount"] *= random.uniform(0.98, 1.02)
-                    if "rare_premium" in new_cfg: new_cfg["rare_premium"] *= random.uniform(0.98, 1.02)
-                    if "abundant_discount" in new_cfg: new_cfg["abundant_discount"] *= random.uniform(0.98, 1.02)
-                else:
-                    if "decay_k" in new_cfg: new_cfg["decay_k"] *= random.uniform(0.95, 1.05)
-                    if "decay_p" in new_cfg: new_cfg["decay_p"] = max(0.01, min(0.99, new_cfg["decay_p"] + random.uniform(-0.02, 0.02)))
-                    if "demand_multiplier" in new_cfg: new_cfg["demand_multiplier"] *= random.uniform(0.95, 1.05)
-                
-                if "elasticity" in new_cfg: new_cfg["elasticity"] *= random.uniform(0.98, 1.02)
-                
-                new_cfg["target_sell_rate"] = global_target_sr
-                return new_cfg
-
-            finetuned_final = []
-            for s_idx, base_cand in enumerate(final_5):
-                # 局所探索用の微小変異体を生成 (10件)
-                micro_population = [base_cand] # オリジナルも比較対象に含める
-                for m_idx in range(10):
-                    micro_mutant = {
-                        "id": "Temp", "name": f"Micro_{s_idx}_{m_idx}",
-                        "strategy": base_cand["strategy"],
-                        "config": mutate_config_micro(base_cand["config"], base_cand["strategy"])
-                    }
-                    micro_population.append(micro_mutant)
-                
-                # 局所バックテスト
-                res_micro = run_backtest_scenarios(micro_population, target_ids, bt_inv_df, bt_events_df)
-                
-                # 最も成績の良いものをこのスロットの最終版とする (Hill Climbing)
-                best_micro = max(res_micro, key=lambda x: x["score"])
-                if best_micro["score"] > base_cand["score"]:
-                    log_container.write(f"Fine-Tuning: シナリオ枠 {s_idx+1} で改善を確認 (Score {base_cand['score']:.1f} -> {best_micro['score']:.1f})")
-                finetuned_final.append(best_micro)
-
-            final_5 = finetuned_final
+            # --- Phase 2: 全件データでの最終検証 (Final Validation) ---
+            log_container.write(f"**[Phase 2] トップ候補の最終検証 (全件データでのバックテスト)**")
+            status_text.text("最終検証フェーズを実行中...")
             
-            for i, f in enumerate(final_5):
+            # スコア順にソートして上位5件を取得
+            completed_trials = [t for t in study.trials if t.state == optuna.trial.TrialState.COMPLETE]
+            completed_trials.sort(key=lambda t: t.value, reverse=True)
+            top_trials = completed_trials[:5]
+            
+            final_cands = []
+            for i, t in enumerate(top_trials):
+                cand = t.user_attrs["cand_info"]
+                idx_char = chr(65 + i)
+                cand["name"] = f"Winner_{idx_char}"
+                cand["id"] = idx_char
+                final_cands.append(cand)
+                
+            # ここでだけ、全件で正確に評価し直す
+            if dev_mode:
+                log_container.write("(開発モードのため、全件データ評価をスキップし、少数の代表データのみで比較します)")
+                final_results = run_backtest_scenarios(final_cands, val_target_ids[:3], bt_inv_df, bt_events_df)
+            else:
+                final_results = run_backtest_scenarios(final_cands, filtered_target_ids, bt_inv_df, bt_events_df)
+                
+            final_results.sort(key=lambda x: x["score"], reverse=True)
+            
+            # 順位(アルファベットと名前)を最終スコアに基づいて再付与
+            for i, f in enumerate(final_results):
                 f["id"] = chr(65 + i)
-            
+                f["name"] = f"Winner_{i+1}"
+                
             st.session_state["eval_scenarios"] = [
                 {"id": f["id"], "name": f["name"], "strategy": f["strategy"], "config": f["config"]}
-                for f in final_5
+                for f in final_results
             ]
-            st.session_state["backtest_results"] = final_5
-            p_bar.progress(100)
+            st.session_state["backtest_results"] = final_results
+            
+            p_bar.progress(1.0)
             status_text.text("最適化完了！")
-            st.success("遺伝的アルゴリズム v3 により、実績データの波を捉えた最も堅牢な5プランを選出しました。")
+            st.success("ベイズ最適化 (Optuna) により、少数の代表データから最もスコアの高い5プランを高速に選出しました。")
 
     if "backtest_results" in st.session_state:
         bt_res = st.session_state["backtest_results"]
@@ -2941,11 +3656,11 @@ elif selected_tab == "🔬 販売モデル設定":
         for i, r in enumerate(bt_res):
             c = colors[i % len(colors)]
             dash_style = styles[i % len(styles)]
-            if r["avg_pred"] is not None and r["lead_days"] is not None:
+            if r["avg_sim"] is not None and r["lead_days"] is not None:
                 # シナリオAのみ太実線、他は破線スタイルで区別
                 width = 4 if i == 0 else 3
                 fig.add_trace(go.Scatter(
-                    x=-r["lead_days"], y=r["avg_pred"] * 100, mode='lines',
+                    x=-r["lead_days"], y=r["avg_sim"] * 100, mode='lines',
                     name=f"[{r['id']}] {r['name']}",
                     line=dict(color=c, width=width, dash=dash_style)
                 ))
