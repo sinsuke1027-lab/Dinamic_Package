@@ -580,6 +580,7 @@ def calculate_pricing_result(
         "inventory_id":          inventory_id,
         "name":                  name,
         "base_price":            base_price,
+        "departure_date":        departure_date,
         "inventory_adjustment":  inv_adj,
         "time_adjustment":       time_adj,
         "velocity_adjustment":   vel_adj,

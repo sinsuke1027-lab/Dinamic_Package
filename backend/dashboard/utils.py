@@ -442,24 +442,30 @@ def render_alerts(results, inv_df, packages, get_velocity_ratio_func):
     # 1. 自動ブレーキ発動中の商品
     braked = [r for r in results if r.get("is_brake_active")]
     for b in braked:
-        alerts.append(("danger", "🚔", f"<b>緊急ブレーキ発動中</b>: {b['name']} は売れすぎのため、AIが自動で値上げ調整を行っています。"))
+        dep_val = b.get("departure_date", "")
+        dep_str = f"（{str(dep_val)[:10]} 出発）" if pd.notna(dep_val) and dep_val else ""
+        alerts.append(("danger", "🚔", f"<b>緊急ブレーキ発動中</b>: {b['name']}{dep_str} は売れすぎのため、AIが自動で値上げ調整を行っています。"))
     
     # 2. 売れ行き鈍化（在庫処分推奨）
     for r in results:
-        inv_matches = inv_df[inv_df["id"] == r["inventory_id"]]
+        inv_matches = inv_df[inv_df["id"].astype(str) == str(r["inventory_id"])]
         if inv_matches.empty: continue
         inv = inv_matches.iloc[0]
+        dep_val = r.get("departure_date", "")
+        dep_str = f"（{str(dep_val)[:10]} 出発）" if pd.notna(dep_val) and dep_val else ""
         try:
             vr = get_velocity_ratio_func(r["inventory_id"], int(inv["total_stock"]), int(inv["remaining_stock"]), r["lead_days"])
             if vr and vr < 0.5 and r["inv_ratio"] > 0.6:
-                alerts.append(("warning", "⚠️", f"<b>販売鈍化警告</b>: {r['name']} の消化が遅れています。パッケージ割引の強化を推奨します。"))
+                alerts.append(("warning", "⚠️", f"<b>販売鈍化警告</b>: {r['name']}{dep_str} の消化が遅れています。パッケージ割引の強化を推奨します。"))
         except: pass
 
     # 3. 未救済の切迫在庫
     if packages:
         top_pkg = packages[0]
         if top_pkg.get("strategy_score", 0) > 0.8:
-            alerts.append(("info", "💡", f"<b>利益最大化のチャンス</b>: {top_pkg['hotel_name']} を含むパッケージが非常に高いスコアを記録しています。"))
+            dep_val = top_pkg.get("departure_date", "")
+            dep_str = f"（{str(dep_val)[:10]} 出発）" if pd.notna(dep_val) and dep_val else ""
+            alerts.append(("info", "💡", f"<b>利益最大化のチャンス</b>: {top_pkg['hotel_name']}{dep_str} を含むパッケージが非常に高いスコアを記録しています。"))
 
     if alerts:
         for level, icon, msg in alerts:
