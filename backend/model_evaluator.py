@@ -61,19 +61,24 @@ def get_product_classification(name: str, item_type: str) -> dict:
         return dict(row)
     return None
 
-def save_product_classification(name: str, item_type: str, characteristic: str, source: str = "manual") -> None:
+def save_product_classification(name: str, item_type: str, characteristic: str, 
+                                target_rate_peak: float=0.95, target_rate_normal: float=0.80, target_rate_offpeak: float=0.60,
+                                source: str = "manual") -> None:
     """特定商品の分類をDBに保存する"""
     conn = sqlite3.connect(DB_PATH)
     cur = conn.cursor()
     now_str = datetime.now(timezone.utc).isoformat()
     cur.execute('''
-        INSERT INTO product_classification (name, item_type, characteristic, source, updated_at)
-        VALUES (?, ?, ?, ?, ?)
+        INSERT INTO product_classification (name, item_type, characteristic, target_rate_peak, target_rate_normal, target_rate_offpeak, source, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(name, item_type) DO UPDATE SET 
             characteristic = excluded.characteristic,
+            target_rate_peak = excluded.target_rate_peak,
+            target_rate_normal = excluded.target_rate_normal,
+            target_rate_offpeak = excluded.target_rate_offpeak,
             source = excluded.source,
             updated_at = excluded.updated_at
-    ''', (name, item_type, characteristic, source, now_str))
+    ''', (name, item_type, characteristic, target_rate_peak, target_rate_normal, target_rate_offpeak, source, now_str))
     conn.commit()
     conn.close()
 
@@ -159,14 +164,16 @@ def backtest_strategy(strategy: str, inv_row: pd.Series, booking_events: pd.Data
     3. 計算された価格によって、実際の歴史データの「需要（販売数）」が弾力性に従い増減したと仮定する
     4. 結果の架空の売上高、最終販売数などを集計する
     """
+    _backtest_price_cache = {}  # 価格計算キャッシュ: (inv_id, strategy, remaining, lead_day, config_key) -> price
     total_stock = inv_row["total_stock"]
     base_price = inv_row["base_price"]
     
-    # 弾力性の優先順位: config > マスタ値
+    # 弹力性の優先順位: config > マスタ値
     elasticity_val = abs(config.get("elasticity", inv_row.get("elasticity", 1.5)))
     
-    # 経過日数の配列を作る (過去90日から0日まで)
-    days = list(range(90, -1, -1))
+    # シミュレーション期間: 120日（ユーザー要望により拡張）
+    BACKTEST_WINDOW = 120
+    days = list(range(BACKTEST_WINDOW, -1, -1))
     
     # booking_eventsから、リードタイムごとの実際の純粋な販売数を集計
     # （ここでは簡略化のため、booked_at と departure_date の差分をリードタイムとする）
@@ -182,15 +189,19 @@ def backtest_strategy(strategy: str, inv_row: pd.Series, booking_events: pd.Data
     daily_actual_sales = booking_events.groupby("lead_days")["quantity"].sum().to_dict()
     
     # シミュレーション用変数
-    sim_remaining = total_stock
+    # 60日より前（61日〜90日等）に既に売れた実績を計算して初期値とする
+    pre_window_sales = sum(v for k, v in daily_actual_sales.items() if k > BACKTEST_WINDOW)
+    
+    sim_remaining = total_stock - pre_window_sales
     sim_revenue = 0
     
     # 定価維持（Baseline）シミュレーション
     base_revenue = 0
-    base_remaining = total_stock
-    actual_sales_so_far = 0
+    base_remaining = total_stock - pre_window_sales
+    actual_sales_so_far = pre_window_sales
     predicted_rates = []
     actual_rates = []
+    sim_rates = []
     tracked_days = []
     
     directional_correct = 0
@@ -198,11 +209,30 @@ def backtest_strategy(strategy: str, inv_row: pd.Series, booking_events: pd.Data
     prev_price = base_price
     prev_actual_demand = 0
     
+    # ─── ポテンシャル（限界）の事前計算 ───
+    def _get_seasonal_target_rate_for_potential(dep_date, c):
+        if not dep_date:
+            return c.get("target_sell_rate", 1.0)
+        try:
+            import pandas as pd
+            dt = pd.to_datetime(dep_date)
+            m = dt.month
+            if m in {5, 7, 8}: return c.get("target_rate_peak", c.get("target_sell_rate", 0.95))
+            elif m in {2, 6, 11}: return c.get("target_rate_offpeak", c.get("target_sell_rate", 0.60))
+            else: return c.get("target_rate_normal", c.get("target_sell_rate", 0.80))
+        except Exception:
+            return c.get("target_sell_rate", 1.0)
+            
+    target_sr_potential = _get_seasonal_target_rate_for_potential(inv_row.get("departure_date"), config)
+    # 最低でも現在の販売率、通常は目標の1.05倍を最終的な需要限界（ポテンシャルの天井）とする
+    potential_limit = max(target_sr_potential * 1.05, (actual_sales_so_far / max(1, total_stock)))
+    cannibalized_demand = 0.0 # 未来からの前借り需要
+    
     for d in days:
         # Note: Removing the 'if sim_remaining <= 0: break' to ensure fixed-length results for averaging
             
-        actual_demand = daily_actual_sales.get(d, 0)
-        actual_sales_so_far += actual_demand
+        actual_demand_raw = daily_actual_sales.get(d, 0)
+        actual_sales_so_far += actual_demand_raw
         
         # ─── [1] 新しい戦略に基づく価格計算 (実際のエンジンを呼び出し)
         from pricing_engine import calculate_pricing_result
@@ -210,71 +240,120 @@ def backtest_strategy(strategy: str, inv_row: pd.Series, booking_events: pd.Data
         # 疑似在庫行
         # エンジン内部で lead_days を再計算するため、reference_date を適切に設定する
         
-        # エンジン実行 (キーワード引数で安全に呼び出し)
-        engine_res = calculate_pricing_result(
-            inventory_id=inv_row["id"],
-            name=inv_row["name"],
-            base_price=base_price,
-            total_stock=total_stock,
-            remaining_stock=sim_remaining,
-            departure_date=inv_row["departure_date"],
-            elasticity=elasticity_val,
-            reference_date=(dep_date - timedelta(days=d)).date(),
-            config=config,
-            strategy=strategy
+        # 価格計算キャッシュ: 同一パラメータ設定の弓を何度も呼ばないよう、結果をdictに保存
+        _price_cache_key = (
+            inv_row["id"], strategy,
+            int(sim_remaining), d,
+            tuple(sorted((k, str(v)) for k, v in config.items() if k not in ("score_weight_mape", "score_weight_dtw", "score_weight_lift", "score_weight_spoilage", "score_weight_dir_acc")))
         )
-        curr_price = engine_res["final_price"]
+        
+        if _price_cache_key in _backtest_price_cache:
+            curr_price = _backtest_price_cache[_price_cache_key]
+        else:
+            engine_res = calculate_pricing_result(
+                inventory_id=inv_row["id"],
+                name=inv_row["name"],
+                base_price=base_price,
+                total_stock=total_stock,
+                remaining_stock=sim_remaining,
+                departure_date=inv_row["departure_date"],
+                elasticity=elasticity_val,
+                reference_date=(dep_date - timedelta(days=d)).date(),
+                config=config,
+                strategy=strategy
+            )
+            curr_price = engine_res["final_price"]
+            _backtest_price_cache[_price_cache_key] = curr_price
             
-        # ─── [2] 価格弾力性による仮想需要の計算
-        # 潜在需要の底上げ (Demand Smoothing): 
-        # 実績が0の日でも、価格を下げれば売れる可能性があるため、微小な値をベースにする
+        # ─── [2] 価格弾力性による仮想需要の計算とポテンシャル制御
+        
+        # カニバリゼーション（需要の前借り）の消化
+        effective_actual = float(actual_demand_raw)
+        if cannibalized_demand > 0 and effective_actual > 0:
+            eat = min(cannibalized_demand, effective_actual * 0.5) # 初動実績の半分まで消化
+            effective_actual -= eat
+            cannibalized_demand -= eat
+            
         demand_floor = 0.05 
-        effective_actual = max(actual_demand, demand_floor)
+        effective_actual = max(effective_actual, demand_floor)
         
         price_ratio = base_price / curr_price if curr_price > 0 else 1.0
+        
+        # 非線形弾力性（限界効用逓減）: ポテンシャル天井に近づくほど、値下げ効果が薄れる
+        current_sim_rate = (total_stock - sim_remaining) / max(1, total_stock)
+        room_ratio = max(0.0, (potential_limit - current_sim_rate) / potential_limit) if potential_limit > 0 else 0.0
+        
+        effective_elasticity = elasticity_val
+        if price_ratio > 1.0:
+            # 値下げによるブースト効果は、残りのポテンシャル余裕度に依存する（余裕がないと効かない）
+            effective_elasticity = elasticity_val * math.sqrt(room_ratio)
+            
         demand_mul = config.get("demand_multiplier", 1.0)
+        sim_demand_float = effective_actual * math.pow(price_ratio, effective_elasticity) * demand_mul
         
-        # 弾力性による増減を、底上げしたベースに対して計算
-        sim_demand_float = effective_actual * math.pow(price_ratio, elasticity_val) * demand_mul
+        # 値下げにより需要が不自然に急増した場合、未来の分を前借りしたとみなす（カニバリゼーション記録）
+        if price_ratio > 1.0 and sim_demand_float > actual_demand_raw:
+            extra = sim_demand_float - actual_demand_raw
+            cannibalized_demand += extra * 0.3 # 増加分の30%を未来の実績から削る
         
-        # 整数化の際に確率的な丸め、または単純四捨五入
-        # ここではシミュレーションの安定性のため四捨五入（0.5以上で1件）
-        sim_demand = int(round(sim_demand_float)) if actual_demand > 0 or sim_demand_float > 0.5 else 0
+        # 整数化の際に確率的な丸め、または単純四捨五入（ここでは安定性のため四捨五入）
+        sim_demand = int(round(sim_demand_float)) if actual_demand_raw > 0 or sim_demand_float > 0.5 else 0
+        
+        # 絶対的な天井リミッター：ポテンシャル上限件数を超過する爆発的売上をカット
+        max_allowable_sales = int(total_stock * potential_limit)
+        current_sales = total_stock - sim_remaining
+        if current_sales + sim_demand > max_allowable_sales:
+            sim_demand = max(0, max_allowable_sales - current_sales)
+            
         sim_demand = min(sim_demand, sim_remaining)
         
         # ─── [3] 状態更新
         sim_remaining -= sim_demand
         sim_revenue += (sim_demand * curr_price)
         
-        base_demand = min(actual_demand, base_remaining)
+        base_demand = min(actual_demand_raw, base_remaining)
         base_remaining -= base_demand
         base_revenue += (base_demand * base_price)
         
         # ─── [4] MAPE用の予測率 vs 実績率 記録
-        target_sr = config.get("target_sell_rate", 1.0)
+        def _get_seasonal_target_rate(dep_date, c):
+            if not dep_date:
+                return c.get("target_sell_rate", 1.0)
+            try:
+                import pandas as pd
+                dt = pd.to_datetime(dep_date)
+                m = dt.month
+                if m in {5, 7, 8}: return c.get("target_rate_peak", c.get("target_sell_rate", 0.95))
+                elif m in {2, 6, 11}: return c.get("target_rate_offpeak", c.get("target_sell_rate", 0.60))
+                else: return c.get("target_rate_normal", c.get("target_sell_rate", 0.80))
+            except Exception:
+                return c.get("target_sell_rate", 1.0)
+        
+        target_sr = _get_seasonal_target_rate(inv_row.get("departure_date"), config)
         if strategy == "demand_forecast":
             k_p = config.get("decay_k", 20.0)
             p_p = config.get("decay_p", 0.12)
             pattern_p = config.get("decay_pattern", "standard")
-            decay_for_plot = calculate_inventory_decay_factor(d, 90, k_p, p_p, pattern=pattern_p)
+            decay_for_plot = calculate_inventory_decay_factor(d, BACKTEST_WINDOW, k_p, p_p, pattern=pattern_p)
             predicted_sales = total_stock * target_sr * (1.0 - decay_for_plot)
         else:
-            predicted_sales = total_stock * target_sr * (1.0 - (d / 90))
+            predicted_sales = total_stock * target_sr * (1.0 - (d / BACKTEST_WINDOW))
             
         predicted_rates.append(predicted_sales / max(1, total_stock))
         actual_rates.append(actual_sales_so_far / max(1, total_stock))
+        sim_rates.append((total_stock - sim_remaining) / max(1, total_stock))
         tracked_days.append(d)
         
         # ─── [5] Directional Accuracy
         price_change = curr_price - prev_price
-        demand_change = actual_demand - prev_actual_demand
+        demand_change = actual_demand_raw - prev_actual_demand
         if abs(price_change) > 100 and demand_change != 0:
             if (price_change > 0 and demand_change <= 0) or (price_change < 0 and demand_change >= 0):
                 directional_correct += 1
             directional_count += 1
             
         prev_price = curr_price
-        prev_actual_demand = actual_demand
+        prev_actual_demand = actual_demand_raw
 
     # --- スコア算出 ---
     
@@ -350,14 +429,17 @@ def backtest_strategy(strategy: str, inv_row: pd.Series, booking_events: pd.Data
         "mae": mae,
         "rmse": rmse,
         "bias": bias,
-        "dtw_distance": round(dtw_dist, 4),
+        "dtw_distance": dtw_dist,
         "revenue_lift": round(revenue_lift, 1),
         "spoilage_reduction": round(spoilage_reduction, 1),
-        "directional_accuracy": round(dir_acc, 1),
+        "directional_accuracy": dir_acc,
         "composite_score": round(composite, 1),
         "lead_days": tracked_days,
         "predicted_rates": predicted_rates,
-        "actual_rates": actual_rates
+        "actual_rates": actual_rates,
+        "simulated_rates": sim_rates,
+        "base_revenue": base_revenue,
+        "sim_revenue": sim_revenue,
     }
 
 def _empty_eval():
@@ -367,7 +449,8 @@ def _empty_eval():
         "rmse": 0,
         "bias": 0,
         "revenue_lift": 0, "spoilage_reduction": 0, "directional_accuracy": 0, "composite_score": 0,
-        "lead_days": [], "predicted_rates": [], "actual_rates": []
+        "lead_days": [], "predicted_rates": [], "actual_rates": [],
+        "simulated_rates": [], "base_revenue": 0, "sim_revenue": 0,
     }
 
 def run_batch_evaluation(inv_df: pd.DataFrame, booking_events: pd.DataFrame, current_config: dict) -> pd.DataFrame:

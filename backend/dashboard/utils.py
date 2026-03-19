@@ -11,6 +11,23 @@ import os
 import pandas as pd
 from datetime import datetime, timezone
 
+def get_seasonal_target_rate(departure_date: str, conf: dict) -> float:
+    """出発日の月に応じて、繁忙期/閑散期/中間期の目標販売率を返す"""
+    if not departure_date:
+        return conf.get("target_sell_rate", 1.0)
+    try:
+        # ISOやYYYY-MM-DDなど対応
+        dt = pd.to_datetime(departure_date)
+        month = dt.month
+        if month in {5, 7, 8}:
+            return conf.get("target_rate_peak", conf.get("target_sell_rate", 0.95))
+        elif month in {2, 6, 11}:
+            return conf.get("target_rate_offpeak", conf.get("target_sell_rate", 0.60))
+        else:
+            return conf.get("target_rate_normal", conf.get("target_sell_rate", 0.80))
+    except Exception:
+        return conf.get("target_sell_rate", 1.0)
+
 def light_dataframe(df: "pd.DataFrame", **kwargs) -> None:
     """DataFrameをライトテーマのHTMLテーブルとして表示する。
     st.dataframe の Canvas レンダリングが黒背景になる問題を回避するため、

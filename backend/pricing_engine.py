@@ -147,7 +147,8 @@ def calc_demand_based_pricing(
     lead_days: int,
     elasticity: float = -1.5,
     reference_date: Optional[date] = None,
-    target_sell_rate: float = 1.0
+    target_sell_rate: float = 1.0,
+    precomputed_metrics: Optional[dict] = None
 ) -> tuple[int, str, float, float]:
     """
     需要予測と価格弾力性に基づいて最適価格調整額を逆算する。
@@ -167,7 +168,7 @@ def calc_demand_based_pricing(
         from packaging_engine import calculate_demand_forecast
         cost = int(base_price * 0.9)
         forecasts = calculate_demand_forecast(
-            inventory_id, lead_days, remaining_stock, total_stock, base_price, cost, reference_date=reference_date
+            inventory_id, lead_days, remaining_stock, total_stock, base_price, cost, reference_date=reference_date, precomputed_metrics=precomputed_metrics
         )
         current_velocity = forecasts["base"]["daily_pace"]
     except Exception:
@@ -175,10 +176,10 @@ def calc_demand_based_pricing(
 
     current_velocity = max(0.01, current_velocity)
 
-    # 3. 最適価格逆算
+    # 3. 最適価格逆算 (需要をratio倍にするには、価格を比率的に逆動かす必要があるため -1.0)
     ratio = target_velocity / current_velocity
     ratio = min(5.0, max(0.2, ratio))
-    price_multiplier = math.pow(ratio, 1.0 / elasticity)
+    price_multiplier = math.pow(ratio, -1.0 / elasticity)
     
     adj = int(base_price * price_multiplier) - base_price
 
@@ -412,7 +413,8 @@ def calculate_pricing_result(
     elasticity: float = -1.5,
     reference_date: Optional[date] = None,
     config: Optional[dict] = None,
-    strategy: str = "rule_based"
+    strategy: str = "rule_based",
+    precomputed_metrics: Optional[dict] = None
 ) -> dict:
     """
     2軸加算モデルによる価格計算を行い、計算根拠付きの PricingResult を返す。
@@ -464,7 +466,7 @@ def calculate_pricing_result(
 
         try:
             from packaging_engine import get_velocity_ratio
-            vr = get_velocity_ratio(inventory_id, total_stock, remaining_stock, lead_days, reference_date=reference_date)
+            vr = get_velocity_ratio(inventory_id, total_stock, remaining_stock, lead_days, reference_date=reference_date, precomputed_metrics=precomputed_metrics)
             if vr and vr >= brake_threshold:
                 vel_adj = round(base_price * brake_strength)
                 vel_reason = f"販売ペース異常({vr:.1f}x)を検知。自動ブレーキ発動(+¥{vel_adj:,})"
@@ -489,16 +491,29 @@ def calculate_pricing_result(
         try:
             from packaging_engine import get_velocity_ratio
             if lead_days:
-                vr = get_velocity_ratio(inventory_id, total_stock, remaining_stock, lead_days, reference_date=reference_date)
+                vr = get_velocity_ratio(inventory_id, total_stock, remaining_stock, lead_days, reference_date=reference_date, precomputed_metrics=precomputed_metrics)
         except Exception:
             pass
 
         # 需要倍率 (Demand Multiplier) の適用
         multiplier = conf.get("demand_multiplier", 1.0)
-        target_sr = conf.get("target_sell_rate", 1.0)
+        
+        def _get_seasonal_target_rate(dep_date, c):
+            if not dep_date: return c.get("target_sell_rate", 1.0)
+            try:
+                import pandas as pd
+                dt = pd.to_datetime(dep_date)
+                m = dt.month
+                if m in {5, 7, 8}: return c.get("target_rate_peak", c.get("target_sell_rate", 0.95))
+                elif m in {2, 6, 11}: return c.get("target_rate_offpeak", c.get("target_sell_rate", 0.60))
+                else: return c.get("target_rate_normal", c.get("target_sell_rate", 0.80))
+            except Exception:
+                return c.get("target_sell_rate", 1.0)
+                
+        target_sr = _get_seasonal_target_rate(departure_date, conf)
         adj_amount, act_reason, target_vel, current_vel = calc_demand_based_pricing(
             inventory_id, base_price, total_stock, remaining_stock, lead_days, elasticity, 
-            reference_date=reference_date, target_sell_rate=target_sr
+            reference_date=reference_date, target_sell_rate=target_sr, precomputed_metrics=precomputed_metrics
         )
         adj_amount = round(adj_amount * multiplier)
         demand_adj = adj_amount
@@ -530,11 +545,34 @@ def calculate_pricing_result(
     # ── 最終価格（上下限: config に基づくクランプ）────────────
     final_price  = round(theoretical / PRICE_ROUNDING_UNIT) * PRICE_ROUNDING_UNIT          # 指定単位で丸め
 
-    min_p = round(base_price * (1.0 - max_discount) / PRICE_ROUNDING_UNIT) * PRICE_ROUNDING_UNIT
-    max_p = round(base_price * (1.0 + max_markup) / PRICE_ROUNDING_UNIT) * PRICE_ROUNDING_UNIT
+    # UIのガードレール設定を取得
+    guardrails = conf.get("guardrails") if isinstance(conf, dict) else None
     
-    final_price = max(final_price, min_p)
-    final_price = min(final_price, max_p)
+    if guardrails and lead_days is not None:
+        if lead_days >= 60:
+            gr = guardrails.get("120_60", {"min": 80, "max": 120})
+        elif lead_days >= 30:
+            gr = guardrails.get("59_30", {"min": 85, "max": 130})
+        elif lead_days >= 14:
+            gr = guardrails.get("29_14", {"min": 90, "max": 150})
+        elif lead_days >= 4:
+            gr = guardrails.get("13_4", {"min": 70, "max": 150})
+        else:
+            gr = guardrails.get("3_0", {"min": 50, "max": 200})
+            
+        min_p = round(base_price * (gr["min"] / 100.0) / PRICE_ROUNDING_UNIT) * PRICE_ROUNDING_UNIT
+        max_p = round(base_price * (gr["max"] / 100.0) / PRICE_ROUNDING_UNIT) * PRICE_ROUNDING_UNIT
+    else:
+        # フォールバック (以前の固定値相当)
+        min_p = round(base_price * (1.0 - max_discount) / PRICE_ROUNDING_UNIT) * PRICE_ROUNDING_UNIT
+        max_p = round(base_price * (1.0 + max_markup) / PRICE_ROUNDING_UNIT) * PRICE_ROUNDING_UNIT
+    
+    if final_price < min_p:
+        reason += f" (※期間下限値 ¥{min_p:,} でクリップ)"
+        final_price = min_p
+    elif final_price > max_p:
+        reason += f" (※期間上限値 ¥{max_p:,} でクリップ)"
+        final_price = max_p
 
     waterfall.append({"label": "最終価格", "value": final_price, "measure": "total"})
 

@@ -72,6 +72,14 @@ SIM_ELASTICITY_PRICE_RATIO_LOW_THRES = 1.0   # 定価以上（値上げ）のし
 SIM_ELASTICITY_DAMPEN_PCT = 50.0   # 弾力性鈍化率（50%になる）
 SIM_ELASTICITY_AMPLIFY_PCT = 150.0 # 弾力性増幅率（150%になる）
 
+# 2.7 シミュレーション・最適化目標ごとの定数
+SIM_PRICE_MULTIPLIERS = [0.7, 0.8, 0.9, 0.95, 1.0, 1.05, 1.1, 1.2, 1.3]
+SIM_PRICE_LOWER_BOUND_RATIO = 0.4
+SIM_PRICE_UPPER_BOUND_RATIO = 2.0
+SIM_OPT_TARGET_PROFIT_INC_SPOILAGE = "最終利益の最大化 (廃棄ロス考慮)"
+SIM_OPT_TARGET_GROSS_MARGIN = "販売粗利の最大化 (廃棄ロス非考慮)"
+SIM_OPT_TARGET_REVENUE = "トップライン(売上高)の最大化"
+
 # 3. 商品分類基準 (model_evaluator.py)
 CLASS_POPULAR_THRESHOLD = 0.75
 CLASS_NICHE_DAYS        = 14

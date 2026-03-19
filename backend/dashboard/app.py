@@ -504,6 +504,175 @@ except Exception as _e:
     st.warning(f"分析エンジンの初期化に失敗しました: {_pkg_err}")
 
 
+@st.cache_data(show_spinner=False, ttl=3600)
+def cached_compute_standalone_strategies(bundle_recs, ai_config, v_today, scenario_multiplier):
+    pass
+    from constants import SIM_PRICE_MULTIPLIERS, SIM_PRICE_LOWER_BOUND_RATIO, SIM_PRICE_UPPER_BOUND_RATIO, DEFAULT_COST_RATIO
+    inv_df = load_inventory()
+    all_events = load_booking_events()
+    
+    bundled_names = set([r["item_name"] for r in bundle_recs if r["strategy"] in ("bundle", "bundle_partner")])
+    standalone_candidates = []
+    
+    for _, row in inv_df.iterrows():
+        name = row["name"]
+        item_id = row["id"]
+        total_stock = max(1, int(row["total_stock"]))
+        remaining_stock = int(row["remaining_stock"])
+        base_price = int(row["base_price"])
+        cost = int(base_price * DEFAULT_COST_RATIO)
+        dep_date_str = str(row["departure_date"])
+        item_type = row["item_type"]
+        
+        if remaining_stock <= 0 or name in bundled_names or dep_date_str in ("---", "None", "nan"):
+            continue
+            
+        try:
+            dep_date = datetime.strptime(dep_date_str[:10], "%Y-%m-%d").date()
+        except:
+            continue
+            
+        current_lead_day = -(dep_date - v_today).days
+        if current_lead_day >= 0 or abs(current_lead_day) > 60:
+            continue
+            
+        p_start = v_today - timedelta(days=365)
+        p_end = v_today
+        auto_elas, auto_boost, _, _ = calculate_auto_tune_parameters(name, p_start, p_end)
+        elas = auto_elas if auto_elas is not None else 1.5
+        boost_val = auto_boost if auto_boost is not None else 15.0
+        
+        item_events = all_events[all_events["inventory_id"] == item_id].sort_values("booked_at")
+        item_events_filtered = item_events[item_events["booked_at"].dt.date <= v_today].copy()
+        current_sales = int(item_events_filtered["quantity"].sum()) if not item_events_filtered.empty else 0
+        
+        last_price = base_price
+        if not item_events_filtered.empty and "sold_price" in item_events_filtered.columns:
+            last_price = int(item_events_filtered["sold_price"].iloc[-1])
+            
+        lookback_days = 30
+        days_remaining = abs(current_lead_day)
+        denominator_days = max(30, (120 - days_remaining))
+        overall_v = current_sales / denominator_days
+        
+        if not item_events_filtered.empty and denominator_days >= lookback_days:
+            item_events_filtered["lead_days"] = item_events_filtered["booked_at"].dt.date.apply(lambda d: -(dep_date - d).days)
+            recent_events = item_events_filtered[
+                (item_events_filtered["lead_days"] <= current_lead_day) & 
+                (item_events_filtered["lead_days"] > (current_lead_day - lookback_days))
+            ]
+            recent_v = recent_events["quantity"].sum() / lookback_days
+            base_daily_v = ((recent_v * 0.8) + (overall_v * 0.2)) * scenario_multiplier
+        else:
+            base_daily_v = overall_v * scenario_multiplier
+            
+        max_daily_sales_cap = max(5, total_stock * 0.10)
+        
+        sim_days = list(range(current_lead_day, 1))
+        curr_p = last_price
+        prev_s = current_sales
+        curr_s = current_sales
+        revenue_strategy_future = 0
+        fixed_interval = 7
+        
+        def get_dynamic_elasticity(p_ratio, base_elas):
+            elas_high_th = ai_config.get("sim_elas_high_th", 2.0)
+            elas_low_th  = ai_config.get("sim_elas_low_th", 1.0)
+            elas_damp    = ai_config.get("sim_elas_damp_pct", 50.0) / 100.0
+            elas_amp     = ai_config.get("sim_elas_amp_pct", 150.0) / 100.0
+            if p_ratio > elas_high_th: return base_elas * elas_damp
+            elif p_ratio < elas_low_th: return base_elas * elas_amp
+            return base_elas
+            
+        first_optimal_price = curr_p
+        
+        for i in range(1, len(sim_days)):
+            if curr_s >= total_stock:
+                continue
+                
+            if i == 1 or i % fixed_interval == 0:
+                days_to_simulate = min(fixed_interval, len(sim_days) - i)
+                best_block_price = curr_p
+                best_block_profit_score = -1
+                
+                for pm in SIM_PRICE_MULTIPLIERS:
+                    test_p = int(curr_p * pm)
+                    test_p = max(test_p, int(base_price * SIM_PRICE_LOWER_BOUND_RATIO))
+                    test_p = min(test_p, int(base_price * SIM_PRICE_UPPER_BOUND_RATIO))
+                    
+                    test_s = curr_s
+                    test_rev = 0
+                    test_sales_count = 0
+                    
+                    for tj in range(days_to_simulate):
+                        if test_s >= total_stock: break
+                        price_ratio = base_price / test_p if test_p > 0 else 1.0
+                        test_elasticity = get_dynamic_elasticity(price_ratio, elas)
+                        boost = 1.0 + (boost_val / 100)
+                        
+                        test_v = (base_daily_v * boost) * (price_ratio ** test_elasticity)
+                        test_v = min(test_v, max_daily_sales_cap)
+                        actual_test_sales = min(test_v, total_stock - test_s)
+                        
+                        test_s += actual_test_sales
+                        test_sales_count += actual_test_sales
+                        test_rev += actual_test_sales * test_p
+                        
+                    test_profit_score = test_rev - (test_sales_count * cost)
+                    if test_profit_score > best_block_profit_score:
+                        best_block_profit_score = test_profit_score
+                        best_block_price = test_p
+                        
+                curr_p = best_block_price
+                if i == 1:
+                    first_optimal_price = curr_p
+                    
+            p_ratio = base_price / curr_p if curr_p > 0 else 1.0
+            cur_elas = get_dynamic_elasticity(p_ratio, elas)
+            boost_rate = 1.0 + (boost_val / 100)
+            cur_v = min((base_daily_v * boost_rate) * (p_ratio ** cur_elas), max_daily_sales_cap)
+            
+            curr_s += cur_v
+            actual_curr_s = min(curr_s, total_stock)
+            actual_daily_sales = actual_curr_s - prev_s
+            revenue_strategy_future += (actual_daily_sales * curr_p)
+            
+            curr_s = actual_curr_s
+            prev_s = curr_s
+            
+        # baseline
+        curr_s_baseline = current_sales
+        prev_s_baseline = current_sales
+        revenue_baseline_future = 0
+        for i in range(1, len(sim_days)):
+            if curr_s_baseline >= total_stock: continue
+            curr_s_baseline += min(base_daily_v, max_daily_sales_cap)
+            act_baseline_s = min(curr_s_baseline, total_stock)
+            revenue_baseline_future += ((act_baseline_s - prev_s_baseline) * base_price)
+            curr_s_baseline = act_baseline_s
+            prev_s_baseline = curr_s_baseline
+            
+        gross_margin_strategy = ((current_sales * last_price) + revenue_strategy_future) - (prev_s * cost)
+        gross_margin_baseline = ((current_sales * last_price) + revenue_baseline_future) - (prev_s_baseline * cost)
+        gain = gross_margin_strategy - gross_margin_baseline
+        
+        if gain > 0:
+            standalone_candidates.append({
+                "item_id": item_id,
+                "departure_date": dep_date_str,
+                "item_name": name,
+                "item_type": item_type,
+                "strategy": "standalone",
+                "partner_name": None,
+                "optimal_price": first_optimal_price,
+                "max_sets": None,
+                "gain": gain,
+                "reason": f"販売シミュレータ(単体)での予測ブースト({boost_val:.1f}%)および価格弾力性({elas:.1f})を考慮し、7日ごとの単価最適化を実行。定価維持と比較して +¥{int(gain):,} の粗利改善が見込まれます。",
+            })
+            
+    standalone_candidates = sorted(standalone_candidates, key=lambda x: x["gain"], reverse=True)
+    return standalone_candidates
+
 # ─── ナビゲーションタブ ──────────────────────────────
 tabs = [
     "📊 エグゼクティブ・サマリー",
@@ -970,28 +1139,23 @@ if selected_tab == "🎯 本日のアクション":
     # ══════════════════════════════════════════════════════════════════
     # 🎯 本日の AI 推奨アクション（Actionable Recommendations）
     # ══════════════════════════════════════════════════════════════════
-    st.markdown("### 🎯 本日の AI 推奨アクション")
-    st.markdown('<p class="section-description">各商品の最適販売戦略。パッケージ推奨は在庫ロスを最小化し、全体利益を最大化する組み合わせです。</p>', unsafe_allow_html=True)
-
     recs = optimal_strategy["recommendations"]
-    bundle_recs     = [r for r in recs if r["strategy"] == "bundle"]
-    standalone_recs = [r for r in recs if r["strategy"] == "standalone"]
-    # bundle_partner は表示リストから除外（バンドル推奨に統合表示）
-
-    if not recs:
-        st.info("商品データがないため、推奨アクションを計算できませんでした。")
+    bundle_recs = [r for r in recs if r["strategy"] == "bundle"]
+    
+    st.markdown("### 🎯 パッケージ販売戦略")
+    st.markdown('<p class="section-description">在庫ロスを最小化し、全体利益を最大化するパッケージ推奨の組み合わせです。</p>', unsafe_allow_html=True)
+    
+    week_kanji = ["月", "火", "水", "木", "金", "土", "日"]
+    from datetime import datetime as _dt
+    
+    if not bundle_recs:
+        st.info("現在、推奨されるパッケージ戦略はありません。")
     else:
-        # すべての推奨アクションを集約して利益(gain)順にソート
-        all_recs = sorted(bundle_recs + standalone_recs, key=lambda r: r.get("gain", 0), reverse=True)
-        top_recs = all_recs[:3]
-        other_recs = all_recs[3:]
+        bundle_recs = sorted(bundle_recs, key=lambda r: r.get("gain", 0), reverse=True)
+        top_bundle = bundle_recs[:3]
+        other_bundle = bundle_recs[3:]
         
-        week_kanji = ["月", "火", "水", "木", "金", "土", "日"]
-        from datetime import datetime as _dt
-        
-        # トップ3アイテムの表示（カレンダー付き詳細カード）
-        for rank, rec in enumerate(top_recs, 1):
-            is_bundle = (rec["strategy"] == "bundle")
+        for rank, rec in enumerate(top_bundle, 1):
             item_icon = "🏨" if rec["item_type"] == "hotel" else "✈️"
             dep_date  = rec.get("departure_date", "---")
             
@@ -1010,23 +1174,16 @@ if selected_tab == "🎯 本日のアクション":
 <div style="display:flex; gap:10px; align-items:center; background:{Theme.white}; border-left:4px solid {Theme.warning}; border-radius:4px; padding:10px; box-shadow:0 1px 2px rgba(0,0,0,0.05);">
 <div style="font-size:0.85rem; color:{Theme.text_muted}; width:130px;">📅 {cal_date_str}</div>
 <div style="font-size:1.1rem; font-weight:bold; color:{Theme.text_dark};">¥{rec['optimal_price']:,.0f}</div>
-<div style="font-size:0.75rem; color:{Theme.text_muted}; margin-left:auto;">{('バンドル固定価格' if is_bundle else '単品維持価格')}</div>
+<div style="font-size:0.75rem; color:{Theme.text_muted}; margin-left:auto;">バンドル固定価格</div>
 </div>
 </div>"""
             
-            if is_bundle:
-                card_style = f"background:rgba(16,185,129,0.08); border:1px solid rgba(16,185,129,0.5); border-radius:14px; padding:18px; margin:8px 0;"
-                badge_html = f'<div style="background:{Theme.success}; color:{Theme.white}; border-radius:8px; padding:4px 10px; font-size:0.75rem; font-weight:900; white-space:nowrap;">📦 パッケージ推奨</div>'
-                gain_html = f"<div style='color:{Theme.success}; font-weight:700;'>推奨価格: ¥{rec['optimal_price']:,}</div><div style='color:{Theme.text_muted};'>上限セット数: {rec['max_sets']} セット</div>"
-                title_html = f"{item_icon} {rec['item_name']} ＋ ✈️ {rec['partner_name']}"
-                impact_html = f"<div style='color:{Theme.chart_accent}; font-size:{Theme.size_md}; font-weight:600; margin-left:auto;'>+¥{rec['gain']:,} 改善</div>"
-            else:
-                card_style = f"background:rgba(100,116,139,0.05); border:1px solid rgba(100,116,139,0.3); border-radius:14px; padding:18px; margin:8px 0;"
-                badge_html = f'<div style="background:{Theme.text_muted}; color:{Theme.white}; border-radius:8px; padding:4px 10px; font-size:0.75rem; font-weight:900; white-space:nowrap;">⚪ 単品維持</div>'
-                gain_html = f"<div style='color:{Theme.text_sec}; font-weight:700;'>現行価格維持: ¥{rec['optimal_price']:,}</div>"
-                title_html = f"{item_icon} {rec['item_name']}"
-                impact_html = ""
-                
+            card_style = f"background:rgba(16,185,129,0.08); border:1px solid rgba(16,185,129,0.5); border-radius:14px; padding:18px; margin:8px 0;"
+            badge_html = f'<div style="background:{Theme.success}; color:{Theme.white}; border-radius:8px; padding:4px 10px; font-size:0.75rem; font-weight:900; white-space:nowrap;">📦 パッケージ推奨</div>'
+            gain_html = f"<div style='color:{Theme.success}; font-weight:700;'>推奨価格: ¥{rec['optimal_price']:,}</div><div style='color:{Theme.text_muted};'>上限セット数: {rec['max_sets']} セット</div>"
+            title_html = f"{item_icon} {rec['item_name']} ＋ ✈️ {rec['partner_name']}"
+            impact_html = f"<div style='color:{Theme.chart_accent}; font-size:{Theme.size_md}; font-weight:600; margin-left:auto;'>+¥{rec['gain']:,} 改善</div>"
+            
             rank_badge = f"<div style='width:24px; height:24px; border-radius:50%; background:{Theme.primary}; color:white; display:flex; align-items:center; justify-content:center; font-size:0.8rem; font-weight:bold;'>{rank}</div>"
 
             st.markdown(f"""<div style="{card_style}">
@@ -1039,11 +1196,9 @@ if selected_tab == "🎯 本日のアクション":
 {calendar_html}
 </div>""", unsafe_allow_html=True)
 
-        # 4件目以降のアイテム（折りたたみ表示）
-        if other_recs:
-            with st.expander(f"その他の推奨アクションを見る ({len(other_recs)}件)"):
-                for rec in other_recs:
-                    is_bundle = (rec["strategy"] == "bundle")
+        if other_bundle:
+            with st.expander(f"その他のパッケージ推奨アクションを見る ({len(other_bundle)}件)"):
+                for rec in other_bundle:
                     item_icon = "🏨" if rec["item_type"] == "hotel" else "✈️"
                     dep_date  = rec.get("departure_date", "---")
                     try:
@@ -1051,8 +1206,7 @@ if selected_tab == "🎯 本日のアクション":
                     except Exception:
                         dep_label = dep_date
                         
-                    if is_bundle:
-                        st.markdown(f"""<div style="background:rgba(16,185,129,0.05); border:1px solid rgba(16,185,129,0.3); border-radius:10px; padding:12px; margin:6px 0; display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+                    st.markdown(f"""<div style="background:rgba(16,185,129,0.05); border:1px solid rgba(16,185,129,0.3); border-radius:10px; padding:12px; margin:6px 0; display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
 <span style="background:{Theme.success}; color:{Theme.white}; border-radius:6px; padding:2px 6px; font-size:0.7rem; font-weight:bold;">📦 パッケージ</span>
 <span style="background:rgba(99,102,241,0.15); color:#a5b4fc; border-radius:6px; padding:2px 8px; font-size:{Theme.size_sm}; font-weight:700;">📅 {dep_label}</span>
 <span style="font-weight:700; color:{Theme.text_dark};">{item_icon} {rec['item_name']} ＋ ✈️ {rec['partner_name']}</span>
@@ -1060,13 +1214,77 @@ if selected_tab == "🎯 本日のアクション":
 <span style="color:{Theme.chart_accent}; font-size:{Theme.size_md}; font-weight:bold; margin-left:auto;">+¥{rec['gain']:,}</span>
 <div style="width:100%; font-size:{Theme.size_xs}; color:{Theme.text_muted}; margin-top:4px;">{rec['reason']}</div>
 </div>""", unsafe_allow_html=True)
-                    else:
-                        st.markdown(f"""<div style="background:rgba(100,116,139,0.05); border:1px solid rgba(100,116,139,0.3); border-radius:10px; padding:12px; margin:6px 0; display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
-<span style="background:{Theme.text_muted}; color:{Theme.white}; border-radius:6px; padding:2px 6px; font-size:0.7rem; font-weight:bold;">⚪ 単品維持</span>
-<span style="background:rgba(99,102,241,0.15); color:#a5b4fc; border-radius:6px; padding:2px 8px; font-size:{Theme.size_sm}; font-weight:700;">📅 {dep_label}</span>
-<span style="font-weight:700; color:{Theme.text_sec};">{item_icon} {rec['item_name']}</span>
-<span style="color:{Theme.text_sec}; font-size:{Theme.size_md}; font-weight:bold;">現行価格: ¥{rec['optimal_price']:,}</span>
-<div style="width:100%; font-size:{Theme.size_xs}; color:{Theme.text_muted}; margin-top:4px;">{rec['reason']}</div>
+
+    st.markdown("<br>", unsafe_allow_html=True)
+    
+    col_t_1, col_t_2 = st.columns([2, 1])
+    with col_t_1:
+        st.markdown("### 🎯 単体販売戦略 (7日固定・粗利最大化)")
+        st.markdown('<p class="section-description">AI推計値(価格弾力性・予測ブースト)をもとに、単体販売での粗利を最大化するトップ3の推奨戦略（直近60日以内出発対象）です。</p>', unsafe_allow_html=True)
+    with col_t_2:
+        standalone_category = st.radio("カテゴリ", ["すべて", "ホテル", "フライト"], horizontal=True, label_visibility="collapsed")
+    
+    scenario_multiplier = FORECAST_MULTIPLIERS.get(curr_scenario, 1.0)
+    all_standalone = cached_compute_standalone_strategies(bundle_recs, ai_config, v_today, scenario_multiplier)
+    
+    filtered_standalone = []
+    if standalone_category == "ホテル":
+        filtered_standalone = [r for r in all_standalone if r["item_type"] == "hotel"]
+    elif standalone_category == "フライト":
+        filtered_standalone = [r for r in all_standalone if r["item_type"] == "flight"]
+    else:
+        filtered_standalone = all_standalone
+        
+    top3_standalone = filtered_standalone[:3]
+    
+    if not top3_standalone:
+        st.info(f"{standalone_category}のカテゴリにて、今後60日間で粗利改善効果がプラスとなる推奨アクションは見つかりませんでした。")
+    else:
+        for rank, rec in enumerate(top3_standalone, 1):
+            item_icon = "🏨" if rec["item_type"] == "hotel" else "✈️"
+            dep_date  = rec.get("departure_date", "---")
+            
+            try:
+                dep_dt = _dt.strptime(dep_date[:10], "%Y-%m-%d").date()
+                dep_label = f"{dep_dt.month}/{dep_dt.day}"
+                
+                start_dt = v_today
+                end_dt = start_dt + timedelta(days=6)
+                if end_dt > dep_dt:
+                    end_dt = dep_dt
+                    
+                end_str = f"{end_dt.month}/{end_dt.day}({week_kanji[end_dt.weekday()]})"
+                start_str = f"{start_dt.month}/{start_dt.day}({week_kanji[start_dt.weekday()]})"
+                cal_date_str = f"{start_str} 〜 {end_str}"
+            except Exception:
+                dep_label = dep_date
+                cal_date_str = f"本日より7日間"
+            
+            calendar_html = f"""<div style="margin-top:12px; padding-top:12px; border-top:1px dashed rgba(0,0,0,0.1);">
+<div style="font-size:0.85rem; font-weight:bold; color:{Theme.primary}; margin-bottom:8px;">🎯 推奨価格設定カレンダー (向こう7日間)</div>
+<div style="display:flex; gap:10px; align-items:center; background:{Theme.white}; border-left:4px solid {Theme.warning}; border-radius:4px; padding:10px; box-shadow:0 1px 2px rgba(0,0,0,0.05);">
+<div style="font-size:0.85rem; color:{Theme.text_muted}; width:130px;">📅 {cal_date_str}</div>
+<div style="font-size:1.1rem; font-weight:bold; color:{Theme.text_dark};">¥{rec['optimal_price']:,.0f}</div>
+<div style="font-size:0.75rem; color:{Theme.text_muted}; margin-left:auto;">7日間固定推奨単価</div>
+</div>
+</div>"""
+            
+            card_style = f"background:rgba(100,116,139,0.05); border:1px solid rgba(100,116,139,0.3); border-radius:14px; padding:18px; margin:8px 0;"
+            badge_html = f'<div style="background:{Theme.text_muted}; color:{Theme.white}; border-radius:8px; padding:4px 10px; font-size:0.75rem; font-weight:900; white-space:nowrap;">⚪ 単体推奨</div>'
+            gain_html = f"<div style='color:{Theme.text_sec}; font-weight:700;'>最適化価格: ¥{rec['optimal_price']:,}</div>"
+            title_html = f"{item_icon} {rec['item_name']}"
+            impact_html = f"<div style='color:{Theme.chart_accent}; font-size:{Theme.size_md}; font-weight:600; margin-left:auto;'>+¥{int(rec['gain']):,} 粗利改善</div>"
+            
+            rank_badge = f"<div style='width:24px; height:24px; border-radius:50%; background:{Theme.primary}; color:white; display:flex; align-items:center; justify-content:center; font-size:0.8rem; font-weight:bold;'>{rank}</div>"
+
+            st.markdown(f"""<div style="{card_style}">
+<div style="display:flex; gap:10px; align-items:center; margin-bottom:8px; flex-wrap:wrap;">
+{rank_badge} {badge_html} <div style="background:rgba(99,102,241,0.2); color:#a5b4fc; border:1px solid rgba(99,102,241,0.4); border-radius:6px; padding:3px 10px; font-size:0.8rem; font-weight:700;">📅 {dep_label}出発</div> {impact_html}
+</div>
+<div style="font-size:1rem; font-weight:800; color:{Theme.text_dark}; margin-bottom:6px;">{title_html}</div>
+<div style="display:flex; gap:16px; flex-wrap:wrap; margin-bottom:6px; font-size:0.9rem;">{gain_html}</div>
+<div style="font-size:{Theme.size_md}; color:{Theme.text_sec}; margin-bottom:4px;">{rec['reason']}</div>
+{calendar_html}
 </div>""", unsafe_allow_html=True)
 
     st.markdown("---")

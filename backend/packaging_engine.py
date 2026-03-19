@@ -28,25 +28,27 @@ def _get_decay_factor(lead_days: int, total_lead_days: int, k: float = 20.0, p: 
     except ImportError:
         return 1.0 # 予備
 
-def get_velocity_ratio(inventory_id: int, total_stock: int, remaining_stock: int, lead_days: int, reference_date: Optional[date] = None) -> Optional[float]:
+def get_velocity_ratio(inventory_id: int, total_stock: int, remaining_stock: int, lead_days: int, reference_date: Optional[date] = None, precomputed_metrics: Optional[dict] = None) -> Optional[float]:
     """直近24時間の販売ペースを期待値と比較した比率を算出する"""
-    conn = get_conn()
-    if reference_date:
-        # reference_dateの最後の時刻を基準にする関数
-        now = datetime.combine(reference_date, datetime.max.time()).replace(tzinfo=timezone.utc)
+    if precomputed_metrics and "actual_24h" in precomputed_metrics:
+        actual_24h = precomputed_metrics["actual_24h"].get(inventory_id, 0)
     else:
-        now = datetime.now(timezone.utc)
-    
-    one_day_ago = (now - timedelta(days=1)).isoformat()
-    now_str = now.isoformat()
-    
-    row = conn.execute(
-        "SELECT SUM(quantity) as qty FROM booking_events WHERE inventory_id = ? AND booked_at >= ? AND booked_at <= ?",
-        (inventory_id, one_day_ago, now_str)
-    ).fetchone()
-    conn.close()
-    
-    actual_24h = row["qty"] if row and row["qty"] else 0
+        conn = get_conn()
+        if reference_date:
+            now = datetime.combine(reference_date, datetime.max.time()).replace(tzinfo=timezone.utc)
+        else:
+            now = datetime.now(timezone.utc)
+        
+        one_day_ago = (now - timedelta(days=1)).isoformat()
+        now_str = now.isoformat()
+        
+        row = conn.execute(
+            "SELECT SUM(quantity) as qty FROM booking_events WHERE inventory_id = ? AND booked_at >= ? AND booked_at <= ?",
+            (inventory_id, one_day_ago, now_str)
+        ).fetchone()
+        conn.close()
+        
+        actual_24h = row["qty"] if row and row["qty"] else 0
     # 期待される24時間あたりの販売数 (単純な定速モデル)
     expected_24h = (total_stock / max(lead_days, 1)) if lead_days > 0 else 0
     
@@ -181,25 +183,28 @@ def calculate_roi_metrics(
         "daily_data":    [dict(r) for r in daily_rows]
     }
 
-def calculate_demand_forecast(inventory_id: int, lead_days: int, remaining_stock: int, total_stock: int, base_price: int, cost: int, reference_date: Optional[date] = None) -> dict:
+def calculate_demand_forecast(inventory_id: int, lead_days: int, remaining_stock: int, total_stock: int, base_price: int, cost: int, reference_date: Optional[date] = None, precomputed_metrics: Optional[dict] = None) -> dict:
     """特定商品の需要予測を行い、3つのシナリオを返す。"""
-    conn = get_conn()
-    
-    if reference_date:
-        now = datetime.combine(reference_date, datetime.max.time()).replace(tzinfo=timezone.utc)
+    if precomputed_metrics and "actual_14d" in precomputed_metrics:
+        actual_14d = precomputed_metrics["actual_14d"].get(inventory_id, 0)
     else:
-        now = datetime.now(timezone.utc)
+        conn = get_conn()
         
-    cutoff = (now - timedelta(days=14)).isoformat()
-    now_str = now.isoformat()
-    
-    row = conn.execute(
-        "SELECT SUM(quantity) as qty FROM booking_events WHERE inventory_id = ? AND booked_at >= ? AND booked_at <= ?",
-        (inventory_id, cutoff, now_str)
-    ).fetchone()
-    conn.close()
+        if reference_date:
+            now = datetime.combine(reference_date, datetime.max.time()).replace(tzinfo=timezone.utc)
+        else:
+            now = datetime.now(timezone.utc)
+            
+        cutoff = (now - timedelta(days=14)).isoformat()
+        now_str = now.isoformat()
+        
+        row = conn.execute(
+            "SELECT SUM(quantity) as qty FROM booking_events WHERE inventory_id = ? AND booked_at >= ? AND booked_at <= ?",
+            (inventory_id, cutoff, now_str)
+        ).fetchone()
+        conn.close()
 
-    actual_14d = row["qty"] if row and row["qty"] else 0
+        actual_14d = row["qty"] if row and row["qty"] else 0
     base_velocity = actual_14d / 14.0
     if base_velocity < 0.05:
         base_velocity = (total_stock * 0.7 / max(lead_days, 30))
@@ -293,7 +298,8 @@ def simulate_sales_scenario(
     lead_days: int, 
     market_condition: str = "base",
     config: Optional[dict] = None,
-    reference_date: Optional[date] = None
+    reference_date: Optional[date] = None,
+    precomputed_metrics: Optional[dict] = None
 ) -> dict:
     """
     30日間（またはリードタイム分）の販売シミュレーションを行い、
@@ -311,7 +317,7 @@ def simulate_sales_scenario(
     h_forecasts = calculate_demand_forecast(
         h_item["id"], lead_days, h_item["remaining_stock"], 
         h_item["total_stock"], h_item["base_price"], h_item["cost"],
-        reference_date=reference_date
+        reference_date=reference_date, precomputed_metrics=precomputed_metrics
     )
     vel_a_base = h_forecasts.get(market_condition, h_forecasts["base"])["daily_pace"]
     
@@ -503,7 +509,7 @@ def simulate_sales_scenario(
         }
     }
 
-def find_optimal_bundle_discount(hotel: dict, flight: dict, scenario: str = "base", config: Optional[dict] = None, reference_date: Optional[date] = None, steps: int = None) -> tuple[int, dict]:
+def find_optimal_bundle_discount(hotel: dict, flight: dict, scenario: str = "base", config: Optional[dict] = None, reference_date: Optional[date] = None, steps: int = None, precomputed_metrics: Optional[dict] = None) -> tuple[int, dict]:
     """
     ホテルとフライトのペアに対し、最も利益(gain)が大きくなる最適な割引額を探索する。
     """
@@ -539,7 +545,7 @@ def find_optimal_bundle_discount(hotel: dict, flight: dict, scenario: str = "bas
         discount_amt = int(combined_price * current_rate)
         
         sim = simulate_sales_scenario(
-            hotel, flight, discount_amt, hotel["lead_days"], scenario, config=config, reference_date=reference_date
+            hotel, flight, discount_amt, hotel["lead_days"], scenario, config=config, reference_date=reference_date, precomputed_metrics=precomputed_metrics
         )
         
         # 利益が全く出ないケースなどは棄却したいが、ここでは最悪でもマシなものを選ぶ
@@ -550,7 +556,7 @@ def find_optimal_bundle_discount(hotel: dict, flight: dict, scenario: str = "bas
             
     return best_discount_amt, best_sim_result
 
-def calculate_optimal_strategy(scenario: str = "base", config: Optional[dict] = None, inventory_ids: Optional[list[int]] = None, current_prices: Optional[dict[int, int]] = None, reference_date: Optional[date] = None) -> dict:
+def calculate_optimal_strategy(scenario: str = "base", config: Optional[dict] = None, inventory_ids: Optional[list[int]] = None, current_prices: Optional[dict[int, int]] = None, reference_date: Optional[date] = None, precomputed_metrics: Optional[dict] = None) -> dict:
     """
     全商品に対して「単品維持」vs「パッケージ化」の最適販売戦略を計算する。
     Prescriptive Analytics の中核ロジック。
@@ -612,7 +618,7 @@ def calculate_optimal_strategy(scenario: str = "base", config: Optional[dict] = 
         cost = int(row["base_price"] * DEFAULT_COST_RATIO)
 
         # フライトの販売速度比率を取得（カニバリゼーション率の動的算出に使用）
-        vr = get_velocity_ratio(row["id"], row["total_stock"], row["remaining_stock"], max(lead_days, 1), reference_date=reference_date)
+        vr = get_velocity_ratio(row["id"], row["total_stock"], row["remaining_stock"], max(lead_days, 1), reference_date=reference_date, precomputed_metrics=precomputed_metrics)
 
         forecast = calculate_demand_forecast(
             inventory_id    = row["id"],
@@ -621,7 +627,8 @@ def calculate_optimal_strategy(scenario: str = "base", config: Optional[dict] = 
             total_stock     = row["total_stock"],
             base_price      = row["base_price"],
             cost            = cost,
-            reference_date  = reference_date
+            reference_date  = reference_date,
+            precomputed_metrics=precomputed_metrics
         )
         sc = forecast.get(scenario, forecast["base"])
 
@@ -657,7 +664,7 @@ def calculate_optimal_strategy(scenario: str = "base", config: Optional[dict] = 
                 continue
 
             # シミュレーション実行 (複数パターンの割引額を試してベストを選ぶ)
-            best_discount_amt, sim = find_optimal_bundle_discount(h, f, scenario, config=config, reference_date=reference_date)
+            best_discount_amt, sim = find_optimal_bundle_discount(h, f, scenario, config=config, reference_date=reference_date, precomputed_metrics=precomputed_metrics)
             gain = sim["gain"]
 
             if gain > best_gain:
