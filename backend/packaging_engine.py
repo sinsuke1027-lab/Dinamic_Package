@@ -1,6 +1,7 @@
 import sqlite3
 import pandas as pd
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone, timedelta, date
+from typing import Optional
 import os
 import math # 追加
 from constants import (
