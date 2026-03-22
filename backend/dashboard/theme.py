@@ -168,5 +168,44 @@ class ThemeColors:
     spacing_md = "20px"
     spacing_lg = "32px"
 
+    # ─── UD（ユニバーサルデザイン）カラーパレット ───
+    ud_categorical = [
+        "#56B4E9",  # Sky Blue
+        "#D55E00",  # Vermilion
+        "#009E73",  # Blue Green
+        "#E69F00",  # Orange
+        "#0072B2",  # Blue
+        "#CC79A7",  # Reddish Purple
+        "#F0E442",  # Yellow
+        "#000000"   # Black
+    ]
+    
+    ud_sequential_age = {
+        "10代": "#c6dbef", 
+        "20代": "#9ecae1", 
+        "30代": "#6baed6", 
+        "40代": "#4292c6", 
+        "50代": "#2171b5", 
+        "60代": "#08519c", 
+        "70代以上": "#08306b",
+        "不明": "#999999"
+    }
+    
+    ud_sequential_comp = {
+        "ソロ (1名)": "#c7e9c0", 
+        "ペア (2名)": "#74c476", 
+        "トリオ (3名)": "#238b45", 
+        "グループ (4名)": "#00441b",
+        "不明": "#999999"
+    }
+    
+    ud_gender = {
+        "M": "#56B4E9",     # 男性 (Sky Blue)
+        "F": "#E69F00",     # 女性 (Orange)
+        "不明": "#999999",  # 不明 (Gray)
+        "男性": "#56B4E9",
+        "女性": "#E69F00"
+    }
+
 # 各ファイルで `from dashboard.theme import Theme` として利用する
 Theme = ThemeColors()

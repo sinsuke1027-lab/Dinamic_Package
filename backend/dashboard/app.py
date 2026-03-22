@@ -964,7 +964,7 @@ if selected_tab == "📊 エグゼクティブ・サマリー":
                     vol_agg["cumulative_quantity"] = vol_agg.groupby("product_name")["quantity"].cumsum()
                     
                     fig_vol = px.line(vol_agg, x="lead_time", y="cumulative_quantity", color="product_name",
-                                      markers=True, color_discrete_sequence=px.colors.qualitative.Pastel)
+                                      markers=True, color_discrete_sequence=Theme.ud_categorical)
                     fig_vol = light_layout(fig_vol, yaxis_title="累積販売数")
                     fig_vol.update_xaxes(title_text="リードタイム（出発の〇日前）", autorange="reversed", tickfont=dict(size=12, color="black"))
                     fig_vol.update_yaxes(tickfont=dict(size=12, color="black"))
@@ -979,7 +979,7 @@ if selected_tab == "📊 エグゼクティブ・サマリー":
                     adr_agg["ADR"] = adr_agg["revenue"] / adr_agg["quantity"]
                     
                     fig_adr = px.line(adr_agg, x="lead_time", y="ADR", color="product_name",
-                                      markers=True, color_discrete_sequence=px.colors.qualitative.Pastel)
+                                      markers=True, color_discrete_sequence=Theme.ud_categorical)
                     fig_adr = light_layout(fig_adr, yaxis_title="平均単価 (¥)")
                     fig_adr.update_xaxes(title_text="リードタイム（出発の〇日前）", autorange="reversed", tickfont=dict(size=12, color="black"))
                     fig_adr.update_yaxes(tickfont=dict(size=12, color="black"))
@@ -1025,8 +1025,23 @@ if selected_tab == "📊 エグゼクティブ・サマリー":
                         cat_orders = {dim_col: ["10代", "20代", "30代", "40代", "50代", "60代", "70代以上"]}
 
                     demog_agg = df_struct.groupby(["product_name", dim_col])["quantity"].sum().reset_index()
+                    
+                    if dim_col == "age_group":
+                        c_map = Theme.ud_sequential_age
+                        c_seq = None
+                    elif dim_col == "companion_label":
+                        c_map = Theme.ud_sequential_comp
+                        c_seq = None
+                    elif dim_col == "gender":
+                        c_map = Theme.ud_gender
+                        c_seq = None
+                    else:
+                        c_map = None
+                        c_seq = Theme.ud_categorical
+                        
                     fig_demo1 = px.bar(demog_agg, x="product_name", y="quantity", color=dim_col,
-                                      color_discrete_sequence=px.colors.qualitative.Pastel,
+                                      color_discrete_map=c_map,
+                                      color_discrete_sequence=c_seq,
                                       category_orders=cat_orders)
                     
                     if anal_disp_struct == "100%積み上げ":
@@ -1072,7 +1087,7 @@ if selected_tab == "📊 エグゼクティブ・サマリー":
 
                     demog_agg_p = df_pop.groupby([dim_col_p, "product_name"])["quantity"].sum().reset_index()
                     fig_demo2 = px.bar(demog_agg_p, x=dim_col_p, y="quantity", color="product_name",
-                                      color_discrete_sequence=px.colors.qualitative.Pastel,
+                                      color_discrete_sequence=Theme.ud_categorical,
                                       category_orders=cat_orders_p)
                                       
                     if anal_disp_pop == "100%積み上げ":
