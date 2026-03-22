@@ -207,5 +207,16 @@ class ThemeColors:
         "女性": "#E69F00"
     }
 
+    ud_hm_diverging = [
+        [0.0, "#D55E00"], # ネガティブ (Vermilion)
+        [0.5, "#ffffff"], # ゼロ周辺
+        [1.0, "#0072B2"]  # ポジティブ (Blue)
+    ]
+    
+    ud_hm_sequential = [
+        [0.0, "#ffffff"],
+        [1.0, "#0072B2"]  # Blue
+    ]
+
 # 各ファイルで `from dashboard.theme import Theme` として利用する
 Theme = ThemeColors()

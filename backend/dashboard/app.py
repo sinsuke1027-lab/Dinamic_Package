@@ -838,21 +838,21 @@ if selected_tab == "📊 エグゼクティブ・サマリー":
                     if "最終利益金額" in hm_metric:
                         z_col = "net_profit"
                         hm_data[z_col] = hm_data[z_col] / 1000.0
-                        colorscale = "RdBu"
+                        colorscale = Theme.ud_hm_diverging
                         val_format = "%{z:,.1f}"
                     elif "販売粗利" in hm_metric:
                         z_col = "gross_profit"
                         hm_data[z_col] = hm_data[z_col] / 1000.0
-                        colorscale = "RdBu"
+                        colorscale = Theme.ud_hm_diverging
                         val_format = "%{z:,.1f}"
                     elif "トップライン" in hm_metric:
                         z_col = "revenue"
                         hm_data[z_col] = hm_data[z_col] / 1000.0
-                        colorscale = "RdBu"
+                        colorscale = Theme.ud_hm_diverging
                         val_format = "%{z:,.1f}"
                     else:
                         z_col = "volume"
-                        colorscale = "RdBu"
+                        colorscale = Theme.ud_hm_diverging
                         val_format = "%{z:,.0f}"
                         
                     # ピボットテーブル化
